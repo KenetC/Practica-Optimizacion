@@ -163,7 +163,7 @@ Hacer los gráficos correspondientes a cada conjuntos de datos.
 """
 
 # ╔═╡ 2df4efbf-d8e4-42b0-a9df-23d825a04ead
-plot_algebraico(D[5])
+plot_algebraico(D[8])
 
 # ╔═╡ 3640e8fd-1b6e-4c4a-9082-38b63e2bbf44
 md"""
@@ -250,18 +250,16 @@ end
 # ╔═╡ ed8c3635-cd1a-4bf7-a05d-f5e1f9923c04
 begin 
 	M = zeros(Float64,3,3)
-	A = [1 2 ;2 4 ; 23 6 ]
+	A = [1 2 ;2 -1232 ; 23 6 ]
 	u,s,v=svd(A)
 	#print(A.^2)
 	a,b,c = ajuste_alg(D[1])
 	r =  √(c+a^2+b^2)
 	p = a,b,r
-	#print(B)
-	#s1 = 1 ./ s 
-	#inv = Diagonal(s1)
-	#inva  = v* inv * u' 
-	#inva * A
-	p = p .+ [1 2 3]
+	#abs(sum(d(D[1],p).^2)) 
+	maximum(abs.(A))
+	
+	#p = p .+ [1 2 3]
 end 
 
 # ╔═╡ 9e2ef2ba-3414-4a42-b340-83462378f19c
@@ -281,8 +279,9 @@ a través de la descomposición en valores singulares de $J$ ($J=U\Sigma V^t$). 
 begin 
 	function paso(J,d)
 		U,Σ,V = svd(J)
-		#print(length(Σ))
-		if abs(maximum(Σ)/minimum(Σ)) > 1e8 
+		print(minimum(abs.(Σ)))
+		print("----")
+		if minimum(Σ) > 1e8 
 			return "Numero de condicion muy alto"
 		else 
 			Σᵢ = 1 ./ Σ
@@ -301,7 +300,7 @@ begin
 			J = Jacob(D,p)
 			h = paso(J,d(D,p))
 			p = p .- h 
-			if F(D,p) < TOL
+			if abs(F(D,p)) < TOL
 				print("El procedimiento fue exitoso")
 				print("cantidad de iteraciones", k)
 				return p
@@ -309,12 +308,13 @@ begin
 			k += 1
 		end
 		print("Termino el numero de iteraciones")
+		return p
 	end
 end 
 
 # ╔═╡ b4de320a-eb63-4160-9d88-f4e11097abef
 begin 
-	ajuste_geom(D[1],1000,1e1)
+	ajuste_geom(D[9],1000,1e-1)
 end
 
 # ╔═╡ 889aa225-8bd9-4706-9c49-6418f4bc4ef1
@@ -323,6 +323,26 @@ md"""
 
 Realizar un plot del ajuste geometrico obtenido junto con el ajuste algebraico y los datos. ¿Observa alguna mejora?
 """
+
+# ╔═╡ 4df4ab4e-5268-4a45-9150-1b099b424209
+begin 
+	function plot_conjunto(D)
+		a,b,c = ajuste_alg(D)
+		r = √(c+a^2+b^2)
+		Θ = 0:0.1:2*π
+		X = a .+ r*cos.(Θ)
+		Y = b .+ r*sin.(Θ)
+		A,B,R = ajuste_geom(D,1000,1e-1)
+		Z = A .+ R*cos.(Θ)
+		W = B .+ R*sin.(Θ)
+		scatter(D[:,1],D[:,2],label = "Puntos")
+		plot!(X,Y, label = "Ajuste Algebraico")
+		plot!(Z,W,label = "Ajuste Geometrico")
+	end
+end
+
+# ╔═╡ ba320e7e-fe19-4460-9c49-f3611221da70
+plot_conjunto(D[6])
 
 # ╔═╡ 9bd5c0e1-9a3a-461d-ad77-fd633ce728eb
 md"""
@@ -373,12 +393,70 @@ La función debe devolver la solución, pero también el número de pasos realiz
 
 """
 
+# ╔═╡ 1eeaed20-2f81-494d-ab66-cf8a85241dad
+begin 
+	function paso2(J,d)
+		U,Σ,V = svd(J)
+		δ = 1e-8
+		Σᵢ = 1 ./ Σ
+		abs_max = maximum(abs.(Σ))
+		for i in 1:length(Σ)
+			if abs(Σ[i]) < δ
+				Σᵢ[i] = δ/abs_max
+			end
+		end
+		Σᵢ = Diagonal(Σᵢ)
+		A = V * Σᵢ * U'
+		h = A * d
+		return h 
+	end
+	
+	function ajuste_mejorado(D,N,TOL)
+		a,b,c = ajuste_alg(D)
+		r =  √(c+a^2+b^2)
+		p = a,b,r
+		k = 1 
+		while k < N 
+			J = Jacob(D,p)
+			h = paso2(J,d(D,p))
+			p = p .- h 
+			if abs(F(D,p)) < TOL
+				print("El procedimiento fue exitoso")
+				print("cantidad de iteraciones", k)
+				return p
+			end
+			k += 1
+		end
+		print("Termino el numero de iteraciones")
+		return p
+	end
+end 
+
 # ╔═╡ 9e09614b-56db-4a69-8198-565eeeeb89dc
 md"""
 ### Ejercicio 10
 
 Comparar gráficamente los resultados obtenidos entre alguno de los últimos métodos descriptos y el metodo de Gauss-Newton puro para los casos donde la matriz $J$ resultante está mal condicionada.
 """
+
+# ╔═╡ 036ba0bb-0802-444e-8342-c35e5487fe46
+begin 
+	function plot_conjunto2(D)
+		a,b,r = ajuste_mejorado(D,1000,1e-1)
+		A,B,R = ajuste_geom(D,1000,1e-1)
+		Θ = 0:0.1:2*π
+		Z = A .+ R*cos.(Θ)
+		W = B .+ R*sin.(Θ)
+		X = a .+ r*cos.(Θ)
+		Y = b .+ r*sin.(Θ)
+		scatter(D[:,1],D[:,2],label = "Puntos")
+		plot!(X,Y,label = "Ajuste Mejorado")
+		plot!(Z,W,label = "Ajuste Geometrico")
+	end 
+end 
+
+# ╔═╡ 1bce5cd2-0728-4100-8a35-3a4ccce9a070
+plot_conjunto2(D[6])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1515,10 +1593,15 @@ version = "1.4.1+1"
 # ╠═0c579f2e-6d20-402e-9627-da7b6987cb34
 # ╠═b4de320a-eb63-4160-9d88-f4e11097abef
 # ╟─889aa225-8bd9-4706-9c49-6418f4bc4ef1
+# ╠═4df4ab4e-5268-4a45-9150-1b099b424209
+# ╠═ba320e7e-fe19-4460-9c49-f3611221da70
 # ╟─9bd5c0e1-9a3a-461d-ad77-fd633ce728eb
 # ╟─0f28b4da-a147-4e1d-91e7-18c425ceedec
 # ╟─90d3d702-84c2-45df-ae21-b04cad4c433c
 # ╟─a3453611-9ced-47a1-b2c5-5163f558405a
+# ╠═1eeaed20-2f81-494d-ab66-cf8a85241dad
 # ╟─9e09614b-56db-4a69-8198-565eeeeb89dc
+# ╠═036ba0bb-0802-444e-8342-c35e5487fe46
+# ╠═1bce5cd2-0728-4100-8a35-3a4ccce9a070
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
