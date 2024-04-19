@@ -150,8 +150,8 @@ begin
 		Θ = 0:0.1:2*π
 		X = a .+ r*cos.(Θ)
 		Y = b .+ r*sin.(Θ)
-		scatter(D[:,1],D[:,2])
-		plot!(X,Y)
+		scatter(D[:,1],D[:,2],label="Puntos")
+		plot!(X,Y,label="Ajuste Algebraico")
 	end
 end
 
@@ -163,7 +163,7 @@ Hacer los gráficos correspondientes a cada conjuntos de datos.
 """
 
 # ╔═╡ 2df4efbf-d8e4-42b0-a9df-23d825a04ead
-plot_algebraico(D[8])
+plot_algebraico(D[6])
 
 # ╔═╡ 3640e8fd-1b6e-4c4a-9082-38b63e2bbf44
 md"""
@@ -237,12 +237,12 @@ begin
 		X = D[:,1]
 		Y = D[:,2]
 		a,b,r = p
-		J = zeros(Float64,length(X),3)
-		Dv = ((X.-a).^2+(Y.-b).^2).^(1/2) .- r
-		#print(Dv)
-		J[:,1] = (-X .+ a) ./ Dv
-		J[:,2] = (-Y .+ b) ./ Dv
-		J[:,3] = -ones(length(X))
+		n = length(X)
+		J = -ones(Float64,n,3)
+		Dv = ((X.-a).^2+(Y.-b).^2).^(1/2) 
+		J[:,1] = (a .- X) ./ Dv
+		J[:,2] = (b .- Y) ./ Dv
+		#J[:,3] = -ones(n)
 		return J 
 	end
 end
@@ -251,15 +251,13 @@ end
 begin 
 	M = zeros(Float64,3,3)
 	A = [1 2 ;2 -1232 ; 23 6 ]
-	u,s,v=svd(A)
+	u,s,v = svd(A)
 	#print(A.^2)
-	a,b,c = ajuste_alg(D[1])
-	r =  √(c+a^2+b^2)
-	p = a,b,r
-	#abs(sum(d(D[1],p).^2)) 
-	maximum(abs.(A))
-	
-	#p = p .+ [1 2 3]
+	#a,b,c = ajuste_alg(D[1])
+	#r =  √(c+a^2+b^2)
+	#p = a,b,r
+	inv = v * Diagonal(1 ./ s) * u' 
+	inv * A  
 end 
 
 # ╔═╡ 9e2ef2ba-3414-4a42-b340-83462378f19c
@@ -279,15 +277,13 @@ a través de la descomposición en valores singulares de $J$ ($J=U\Sigma V^t$). 
 begin 
 	function paso(J,d)
 		U,Σ,V = svd(J)
-		print(minimum(abs.(Σ)))
-		print("----")
-		if minimum(Σ) > 1e8 
-			return "Numero de condicion muy alto"
+		if minimum(abs.(Σ)) < 1e-4 
+			print("Numero de condicion muy alto")
 		else 
 			Σᵢ = 1 ./ Σ
 			Σᵢ = Diagonal(Σᵢ)
-			A = V * Σᵢ * U'
-			h = A * d
+			J_inv = V * Σᵢ * U'
+			h = J_inv * d
 			return h 
 		end			
 	end
@@ -300,9 +296,11 @@ begin
 			J = Jacob(D,p)
 			h = paso(J,d(D,p))
 			p = p .- h 
+			#print("cantidad de iteraciones", k)
+			#print("---")
+			#print(abs(F(D,p)))
 			if abs(F(D,p)) < TOL
 				print("El procedimiento fue exitoso")
-				print("cantidad de iteraciones", k)
 				return p
 			end
 			k += 1
@@ -310,11 +308,11 @@ begin
 		print("Termino el numero de iteraciones")
 		return p
 	end
-end 
+end
 
 # ╔═╡ b4de320a-eb63-4160-9d88-f4e11097abef
 begin 
-	ajuste_geom(D[9],1000,1e-1)
+	ajuste_geom(D[4],1000,1e-1)
 end
 
 # ╔═╡ 889aa225-8bd9-4706-9c49-6418f4bc4ef1
