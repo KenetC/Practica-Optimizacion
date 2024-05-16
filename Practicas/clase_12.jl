@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.42
+# v0.19.41
 
 using Markdown
 using InteractiveUtils
@@ -38,6 +38,14 @@ md"""
 
 """
 
+# ╔═╡ adeaccdf-4931-4169-a245-e58aa8077c9f
+function CC(f,x;ϵ=0.01,t=0.1)
+	y = x
+	n = size(y)
+	j = 1; k = j
+	
+end
+
 # ╔═╡ 6db01147-5934-4c8a-ae9d-62990674c8e4
 md"""
 *Algoritmo método de descenso coordenado cíclico discreto*
@@ -54,28 +62,47 @@ En esta variante del método de descenso coordenado, no se utiliza ningún méto
 """
 
 # ╔═╡ d2aaba5e-1ac4-4175-b70b-eec3e16548e2
-function(f,x₁;ϵ=0.01,t=0.1)
-	y = x₁
+function CCdiscreto(f,x;ϵ=0.01,t=0.1)
+	y = x
 	n = size(y)
-	j = 1; k = j 
-	ej = zeros(n)
-	ej[j] = 1 
-	#pasoj[j] = (1+t)*y[j]
-	if f(y + t*ej) < f(y)
-		y = y + t*ej
-	else 
-		if f(y - t*ej) < f(y)
-			y = y - t*ej
-		end
-	end
 	
-	if j < n 
-		j += 1
+	j = 1; k = j
+	while t > ϵ 
+		ej = zeros(n)
+		ej[j] = 1 
+		
+		if f(y + t*ej) < f(y)
+			y += t*ej
+		elseif f(y - t*ej) < f(y)
+				y -= t*ej	
+		end
+		
+		if j < n
+			j += 1
+			continue 
+		elseif f(y) < f(x)
+			k += 1 
+			x = y
+			j = 1
+			continue 
+		end 
+		t /= 2
+		x = y
+		y = x 
+		
+		k += 1 
+		j = 1 
+		
 	end
-		
-			
-		
+	return x 
 end
+
+# ╔═╡ 1c596fc7-2a1f-4365-bcf6-ab5fc1ff89d2
+begin 
+	i = 1 
+	i += 1
+	println(i)
+end 
 
 # ╔═╡ d3f77c8a-8318-453b-b832-9410a4cb2673
 md"""
@@ -89,7 +116,7 @@ md"""
 
 # ╔═╡ e470cc9b-5b3b-4ec5-9100-9f80fd5e03df
 begin 
-	f((x,y))=(x-2)^4 + (x-2y)^4
+	f((x,y)) = (x-2)^4 + (x-2y)^4
 	
 end
 
@@ -136,8 +163,10 @@ md"""
 # ╟─2c705f30-1181-11ef-3583-ad9dca279bb1
 # ╟─4916bc0c-4562-44b4-81f7-7aa233db919c
 # ╟─bf1d8262-654e-4c8d-8fe2-080fcf1fc9eb
+# ╠═adeaccdf-4931-4169-a245-e58aa8077c9f
 # ╟─6db01147-5934-4c8a-ae9d-62990674c8e4
 # ╠═d2aaba5e-1ac4-4175-b70b-eec3e16548e2
+# ╠═1c596fc7-2a1f-4365-bcf6-ab5fc1ff89d2
 # ╟─d3f77c8a-8318-453b-b832-9410a4cb2673
 # ╠═e470cc9b-5b3b-4ec5-9100-9f80fd5e03df
 # ╟─c6db700d-8b4d-434a-aff0-9eff34e316aa
