@@ -39,11 +39,11 @@ md"""
 """
 
 # ╔═╡ adeaccdf-4931-4169-a245-e58aa8077c9f
-function CC(f,x;ϵ=0.01,t=0.1)
+function CC(f,x;ϵ=0.01)
 	y = x
 	n = size(y)
 	j = 1; k = j
-	
+	busquedaLineal()
 end
 
 # ╔═╡ 6db01147-5934-4c8a-ae9d-62990674c8e4
