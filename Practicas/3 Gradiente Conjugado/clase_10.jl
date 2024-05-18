@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.41
+# v0.19.40
 
 using Markdown
 using InteractiveUtils
@@ -14,355 +14,144 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ 59b6a725-a2da-443d-8255-dea4ba6c80ea
-using Plots,LinearAlgebra, PlutoUI,Interpolations
+# ╔═╡ a6a61f01-d094-4c84-876b-ae5125c3b3fb
+using LinearAlgebra, Plots, PlutoUI
 
-# ╔═╡ 25aa50c5-ef79-43ca-a966-9e6a2926a86f
+# ╔═╡ 598d505a-0c6c-11ef-064c-f16bc5f13328
 md"""
-# Método del Gradiente (Cuadráticas)
+# Gradiente Conjugado (cuadráticas)
 """
 
-# ╔═╡ 78f4d328-b4fc-4dfb-9472-53d130c3c198
+# ╔═╡ 16b2ccff-56aa-4342-a3e1-a82bf6e092f1
 md"""
-Consideremos 
+**Definición:** Sea  $A\in \mathbb{R}^{n×n}$ definida positiva, diremos que los vectores  $d_0,d_1,…,d_{n−1}\in\mathbb{R}^{n}\backslash \{0\}$ son A-conjugados si: 
 
-$$f(x)=\frac{1}{2}x^tAx-b^tx+c$$
+$$d_i^tAd_j=0$$
 
-donde $A\in\mathbb{R}^{n\times n}$ es una matriz simétrica y definida positiva.
+**Lema:** Sea  $A\in\mathbb{R}^{n×n}$ definida positiva, cualquier conjunto de vectores A-conjugados es linealmente independiente.
 
-1. Dado que $A>0$, los autovalores son todos positivos.
-2. La función $f$ es estrictamente convexa.
-3. El mínimo $x^*$ es la solución de $Ax^*=b$ (pues $\nabla f(x)=Ax-b$).
+Sea  $f:\mathbb{R}^n→\mathbb{R}$ dada por: $f(x)=\frac{1}{2}x^tAx+bx^t+c$ con  $A\in\mathbb{R}^{n×n}$ definida positiva,  $b∈\mathbb{R}^n$, $c∈\mathbb{R}$.
 
-Sabemos que el método de descenso más rápido puede tomarse como 
+Sea $\{d_0, \dots, d_k\}$ un conjunto de vectores A-conjugados cualquiera, la idea consiste en tomar: 
 
-$$x_{k+1}=x_{k}-\alpha_k\nabla f(x_{k})$$
+$$x_{k+1} = x_{k} + t_kd_k \quad \text{donde} \quad t_k = \underset{t\in\mathbb{R}}{\mathrm{argmin}}\{f(x_k + td_k)\}$$
 
-donde $\alpha_k = argmin_{\alpha}f(x_k-\alpha\nabla f(x_k))$. 
+Notar que, como no sabemos si los  $d_k$ son direcciones de descenso, no pedimos que  $t_k$ sea necesariamente positivo. Nuevamente, definimos  $φ(t)=f(x_k+td_k)$ y, como  $f$ es cuadrática, podemos hallar el $t$ óptimo:
 
-Luego se puede ver que 
+$\begin{array}{l} 0 = \varphi'(t_k) = \nabla f(x_{k} + t_kd_k)^Td_k = \nabla f(x_{k+1})^Td_k \\ 
+\nabla f(x_{k+1}) = Ax_{k+1} + b =A(x_k + t_kd_k) + b = \nabla f(x_k) + t_kAd_k \\
+\Rightarrow t_k = - \dfrac{\nabla f(x_k)^T d_k}{(d_k)^TAd_k}\end{array}$
 
-$$\alpha_k=\frac{\nabla f(x_k)^t\nabla f(x_k)}{\nabla f(x_k)^t A\nabla f(x_k)}$$
 """
 
-# ╔═╡ 3b2b39fb-e444-41c2-980e-35be65454347
+# ╔═╡ f74c8e2b-dfb6-41ac-8464-ecee852198fe
+md"""
+### Método de gradiente conjugado
+
+La idea consiste en que las direcciones conjugadas  $\{d_0,…,d_k\}$ sean definidas a partir del gradiente de  $f$. Sea $x_0∈\mathbb{R}^n$, se define $d_0=−∇f(x_0)$ y, para $k=0,1,…,n−2$ se define:
+
+$$d^{k+1} = -\nabla f(x_{k+1}) + \beta_kd_k$$
+
+donde  $β_k$ es calculado de manera tal que $d_k$ y $d_{k+1}$ sean A-conjugados:
+
+$$\beta_k = \dfrac{(d_k)^T A \nabla f(x_{k+1})}{(d_k)^TAd_k}$$
+
+**Obs:**  $d_k$ son direcciones de descenso:
+
+$$\nabla f(x_k)^T d_k = \nabla f(x_k)^T (-\nabla f(x_k)+\beta_{k-1}d_{k-1}) = -\lVert \nabla f(x_k) \rVert ^2$$
+
+**Teorema:** Sea  $f\colon \mathbb{R}^n \rightarrow \mathbb{R}$ dada por  $\frac{1}{2}x^TAx + bx^T +c$ con  $A∈\mathbb{R}^{n×n}$ definida positiva, $b∈\mathbb{R}^n$, $c∈\mathbb{R}$, entonces dado $x_0∈\mathbb{R}^n$, la secuencia definida anteriormente alcanza el minimizador $x^∗$ en n pasos (i.e.  $x_n=x^∗$).
+
+**Lema:** Sea  $x_0∈\mathbb{R}^n$, la secuencia definida anteriormente cumple que:
+
+$$\nabla f(x_k)^Td_j = 0 \quad \forall j=0,1,\dots,k-1$$
+
+
+"""
+
+# ╔═╡ a92e4984-0495-43b4-97ca-9b1ccadb62b0
+md"""
+λ1 $(@bind λ1 Slider(1:0.5:100))
+
+λ2 $(@bind λ2 Slider(1:0.5:100))
+
+λ3 $(@bind λ3 Slider(1:0.5:100))
+
+λ4 $(@bind λ4 Slider(1:0.5:100))
+
+λ5 $(@bind λ5 Slider(1:0.5:100))
+"""
+
+# ╔═╡ 96ad091e-c7f1-4719-9f11-d53b4ff37824
+A = [λ1 0 0 0 0;0 λ2 0 0 0;0 0 λ3 0 0;0 0 0 λ4 0;0 0 0 0 λ5]
+
+# ╔═╡ 2a720ea1-26f4-4985-8e57-3eea5e087dd6
+md"""Sea:
+
+$f(x)=\frac{1}{2}x^t Ax - b^t\cdot x$
+"""
+
+# ╔═╡ ed73a4ca-9acf-48d1-a0da-e95fba8a89a9
 md"""
 !!! note "Ejercicio 1"
-	Implementar una función que realice el método del gradiente para el caso de funciones cuadraticas. La función debe construir un vector que vaya guardando los $x_k$ (para esto puede ser útil la función `push!`) e imprima al final la cantidad de pasos que fueron necesarios para llegar al mínimo. 
+	Calcular el mínimo exacto de la función enunciada anteriorimente con $b=(2,5,2,1,0)$
 """
 
-# ╔═╡ d653b474-fbe4-486c-aee7-28eb8312ec66
-function grad_cuad(A,b,c;x0=zeros(length(b)),tolx=1e-8,tolf=1e-8,N=1e5)
-	x = Vector{Vector{Float64}}([x0])
-	loop = true 
-	i    = 1 
-	while loop 
-		xk   = x[end] 
-		r    = b-A*xk
-		α    = r⋅r/(r⋅(A*r)) 
-		xk1   = xk + α*r 
-		push!(x,xk1) 
-		i   += 1 
-		loop = norm(xk-xk1)>tolx && norm(r)>tolf && i ≤ N
-	end
-	println("El método llegó a un resultado satisfactorio en $(length(x)-2) pasos")
-	return x
-end
+# ╔═╡ 8adb753d-7e58-4f11-b40d-c23915bfaf58
+#completar
 
-# ╔═╡ 4d7e22df-3481-4073-a1c3-9d0d8f88d4b4
+# ╔═╡ 6f6e45e3-d703-4fc3-ac97-d9cc5990c28b
 md"""
-!!! note "Ejercicio 2"
-	Tomar $b=(3,4)$, $c=10$ y calcular el minimo exacto y el dado por el método del gradiente para las siguientes matrices:
+!!! note "Ejericicio 2"
+	Implementar el método de Gradiente Conjugados para funciones cuadráticas y corroborar el resultado usando la función de arriba. La implementación ademas del mínimo debe devolver la cantidad de pasos que realizó el método.
 """
 
-# ╔═╡ 5713c921-b942-4ef1-94c3-024007519444
-begin
-	b = [3,4]
-	c = 10
-	A1= [3 -1;-1 3]
-	A2= [11 -9;-9 11]
-end
+# ╔═╡ e5b0ff2c-6a81-4c4b-b959-cc9e29add5dc
+#completar
 
-# ╔═╡ f19c178a-afd1-458a-8c3b-6be8d799b6b7
-sol1 = grad_cuad(A1,b,c)
-
-# ╔═╡ 8a7951cf-db5f-4242-820d-df7218e14df7
-sol_ex1 = A1\b
-
-# ╔═╡ d23efd3f-eaec-4252-85ec-166498af09c1
-sol2=grad_cuad(A2,b,c)
-
-# ╔═╡ be3f9271-0d8c-48f4-85a5-3013228202a9
-sol_ex2=A2\b
-
-# ╔═╡ ad39c9d5-7437-40ce-8d27-da7fc0c7cbbb
-md"""
-¿Cómo es la convergencia en cada caso?¿Cómo son los autovalores? (sug: usar el comando `eigvals`).
-"""
-
-# ╔═╡ 10a65128-7601-4363-b035-1db8384196e3
-eigvals(A1)
-
-# ╔═╡ 2f5de04b-8edb-4c50-9269-d5386093c920
-eigvals(A2)
-
-# ╔═╡ 3f490da8-f7ce-443a-aead-d8696a7d5680
-md"""
----
-"""
-
-# ╔═╡ f576a1b6-6022-404e-81e7-b6225968aa3a
-md"""
-Las curvas de nivel de $f$ son elipsoides n-dimensionales con ejes en las direcciones de los n-autovectores mutuamente ortogonales de $A$. El eje correspondiente al i-ésimo autovector tiene una longitud proporcional a $\frac{1}{\lambda_i}$. Analicemos este proceso y veamos que la tasa de convergencia depende de la relación de las longitudes de los ejes de los contornos elípticos de $f$.
-"""
-
-# ╔═╡ b7c673a5-aa18-4805-9027-ef714d28eec4
-md"""
-λ1 $(@bind λ1 Slider(1:0.5:10))
-
-λ2 $(@bind λ2 Slider(1:0.5:10))
-
-θ $(@bind θ Slider(0:0.1:2π))
-"""
-
-# ╔═╡ 0b494593-f72e-4cc4-bf31-ba85748d53bf
-println("λ_1 = $(λ1), λ_2= $(λ2), θ= $(θ)")
-
-# ╔═╡ ebde75f6-86b2-4b0c-b292-b980edd7c685
-begin
-	Q 	 = [cos(θ) sin(θ);-sin(θ) cos(θ)]
-	A    = Q'*[λ1 0;0 λ2]*Q
-	f(x) = (0.5)*x'*A*x - b'⋅x + c
-	f(x1,x2)=f([x1,x2])
-end
-
-# ╔═╡ 953bc410-aa3f-4995-8a35-0445a5cd18d5
-begin 
-	x = grad_cuad(A,b,c) 
-	ex= A\b
-	println("solución aprox: $(x[end-1])")
-	println("solucion exacta $(ex)")
-end
-
-# ╔═╡ 6b033cf1-9b6e-4a19-bcd3-61e11fb6e418
-begin
-	if λ1 == λ2
-		xs=range(-10,10,length=1000)
-		ys=xs
-		X = hcat(x...)'
-		contour(xs,ys,f)
-		x1=X[:,1]
-		y1=X[:,2]
-		plot!(x1,y1,label="Método del gradiente")
-	else
-		xs=range(-10,10,length=1000)
-		ys=xs
-		X = hcat(x...)'
-		l=f.(x)
-		l2     = (l[2:end]+l[1:end-1])./2
-		L      = [l;l2;1.5*maximum(l);2*maximum(l)]
-		contour(xs,ys,f,levels=L,c=cgrad(:jet,length(L)),xlim=(0-1,ex[1]+1),ylim=(0-1,ex[2]+1))
-		x1=X[:,1]
-		y1=X[:,2]
-		plot!(x1,y1,label="Método del gradiente")
-	end
-end
-
-# ╔═╡ 5b93d6a8-b01d-4d61-a12d-de4a90ee3951
-begin 
-	#juntados = hcat(x...)' 
-	xss = range(-10, stop=10, length=100)
-	yss = range(-10, stop=10, length=100)
-	
-	# Evaluar la función en la malla (x, y)
-	z = f.(xss', yss)  # ' transpone el vector x para que sea una columna
-	
-	# Graficar la función
-	surface(xss, yss, z, xlabel="x", ylabel="y", zlabel="f(x, y)", title="Gráfico 3D de f(x, y)")
-end
-
-# ╔═╡ ad27c73f-cbb7-4ced-b2cc-bd18b637a802
-md"""
-#### ¿Qué es lo que sucede?
-"""
-
-# ╔═╡ 0b7ed17b-88e4-4d2d-bad5-51911a7d8998
-md"""
-Si se elige α de modo que $f(x_k+ αd_k)$ se minimice en cada iteración, entonces las direcciones sucesivas son ortogonales. En efecto, 
-```math
-\frac{\partial f(x_k+αd_k)}{\partial α} = \nabla f (x_k+αd_k)^t d_k
-```
-Si $α^*$ el valor donde se minimiza $f(x_k+αd_k)$, entonces 
-```math
- 0=\nabla f(x_k+\alpha^*d_k)^td_k=d_{k+1}^td_k
-```
-"""
-
-# ╔═╡ 6c88602f-ec7c-493e-a9b2-de3326ae56ac
-md"""
-!!! terminology "Teorema"
-
-	Para $x_0\in\mathbb{R}^n$ el método converge a un único mínimo $x^{*}$ y si $E(x)=\frac{1}{2}(x-x^*)^t A (x-x^*)$ entonces se tiene 
-	```math
-	E(x_{k+1})\leq (\frac{\lambda_n-\lambda_1}{\lambda_n+\lambda_1})^2 E(x_k)
-	```
-	con $\lambda_i$ autovalores tales que $\lambda_n\geq...\geq\lambda_1\geq 0$.
-"""
-
-# ╔═╡ 1d1879a0-dca2-11ee-07a4-31f58d596e6b
-md"""
-# Gradientes
-
-Para una función ``f:\mathbb{R}\to \mathbb{R}``, su gradiente está definido por
-
-```math
-f'(x) = \lim_{h\to 0}\frac{f(x+h)-f(x)}{h}.
-```
-
-Para  ``f:\mathbb{R}^n\to \mathbb{R}^m``, se define una matrix ``\nabla f(x)`` de tamaño ``m\times n`` definido por
-
-```math
-(\nabla f(x))_{i,j} = \frac{\partial f_i}{\partial x_j}(x) = \lim_{h\to 0}\frac{f_i(x_1,\dots,x_{j-1},x_j+h,x_{j+1},\dots,x_n)-f(x_1,\dots,x_n)}{h}.
-```
-
-La derivada es la dirección del crecimiento más rápido. La siguiente figura muestra el campo vectorial de derivadas, donde cada flecha muestra la dirección y el tamaño de las derivadas en los puntos del dominio. Dado que una función tiene los mismos valores de función a lo largo de sus curvas de nivel y que la derivada es la dirección del ascenso más pronunciado, las derivadas son perpendiculares a las curvas de nivel. La figura también muestra que los mínimos locales y los máximos locales tienen derivadas cero.
-"""
-
-# ╔═╡ 545958ec-8c8c-4ca0-b4bb-a07968441805
-md"""
-![](https://juliateachingctu.github.io/Julia-for-Optimization-and-Learning/stable/lecture_08/grad3.svg)
-"""
-
-# ╔═╡ 6bb0ec7a-0008-40ec-aeb2-842dc6aba584
-md"""
-## Gradiente numérico
-
-La forma más sencilla de calcular los gradientes es utilizar una aproximación en diferencias finitas. Reemplaza el límite
-
-```math
-f'(x) = \lim_{h\to 0}\frac{f(x+h)-f(x)}{h}
-```
-
-fijando alguna ``h`` y aproxima el gradiente mediante
-
-```math
-f'(x) \approx \frac{f(x+h)-f(x)}{h}.
-```
-"""
-
-# ╔═╡ 02c292b9-3483-47f2-a2cf-bbd4d4c1746c
+# ╔═╡ edf9308a-8d17-435e-9fca-a8da540b9ef7
 md"""
 !!! note "Ejercicio 3"
-	Escribe una función que calcule la aproximación de ``f'(x)`` por diferencias finitas. Las entradas son una función ``f:\mathbb R\to\mathbb R`` y un punto ``x\in\mathbb{R}``. Debería tener una entrada opcional ``h\in\mathbb{R}``, para la cual se debe elegir un valor razonable.
+	Verificar la cota del ejercicio 5 de la guía. ¿Que sucede si los autovalores están mas separados?: 
+
+	$\|x_{x+1}-x^{*}\|_A\leq 2 (\frac{\sqrt{k(A)}-1}{\sqrt{k(A)}+1})^{k+1}\|x_0-x^{*}\|_A,$
+
+	donde $k(A)=cond(A)=\frac{\lambda_{max}}{\lambda_{min}}$
 """
 
-# ╔═╡ 8645e1ed-8c0a-41ad-9dd7-f1dc58fe92e0
-dif_finit(f,x::Real;h=1e-8)=(f(x+h)-f(x))/h
+# ╔═╡ 54b438ae-04b0-407e-b9ed-fec59b1040e7
+#completar
 
-# ╔═╡ cf29088c-21ed-4d90-aeea-eee4f6471ea1
-begin
-	g(x)=x^2
-	dif_finit(g,2)
-end
-
-# ╔═╡ 2a704994-f7b8-4c19-8763-b32626e11e55
+# ╔═╡ ec65327c-968f-43fd-a9c3-0b614bcf97c7
 md"""
 !!! note "Ejercicio 4"
-	Implementar una función que calcule el gradiente numérico de una función utilizando la derivada numérica.
+	Repetir lo anterior la función cuadratica $f(x)=\frac{1}{2}x^t Qx - B^t\cdot x$, donde la matriz $Q$ está dada por: 
+
+	$Q=\bigl(\begin{smallmatrix}Q1 & Q2 & Q3 & Q4\\ Q2 & Q1 & Q2 & Q3\\Q3 & Q2 & Q1&  Q2\\Q4 & Q3 & Q2 & Q1\end{smallmatrix}\bigr)$
 """
 
-# ╔═╡ 5886f879-f622-4e01-bb73-a01eedd899e8
-function grad_dif(f,x;h=1e-8)
-	grad2 = dif_finit(y -> f(x[1],y), x[2];h)
-	grad1 = dif_finit(y -> f(y,x[2]), x[1];h)
-	return [grad1,grad2]
-end
-
-# ╔═╡ 97590a8e-966f-4e1c-b31a-6d8a2d50306e
-begin 
-	g2(x,y)=x^2+y^2
-	grad_dif(g2,[0,1])
-end
-
-# ╔═╡ 46447e68-7423-4d4b-b021-1343f5a4a1f5
-md"""
----
-"""
-
-# ╔═╡ b733018d-ffde-4a87-be67-e10ec1d4697c
-md"""
-Esta forma de calcular el gradiente tiene dos desventajas:
-1. Es lento. Para una función de ``n`` variables, necesitamos evaluar la función al menos ``n+1`` veces para obtener el gradiente completo.
-2. Tiene orden 1 en $h$.
-3. No es preciso, como muestra el siguiente ejemplo.
-"""
-
-# ╔═╡ ff2e107c-7aa7-4e9a-95b4-ffbb842937ac
-md"""
-!!! note "Ejercicio 5"
-	Fijar un punto ``x=-2``. Para una discretización adecuada de ``h\in [10^{-15}, 10^{-1}]`` calcular la aproximación en diferencias finitas de la derivada de ``f``.
-	
-	Graficar la dependencia de esta aproximación con ``h`` y agregar la derivada verdadera.
-"""
-
-# ╔═╡ 83377860-105f-4b93-a5e3-14f31f637472
-### completar
+# ╔═╡ 530db6ec-d24c-4fc5-9652-9e0cf41c65c6
 begin
-	hs = 10. .^ (-15:0.01:-1)
-	dif(h)=dif_finit(g,-2;h=h)
-	plot(hs, dif,
-    xlabel = "h",
-    ylabel = "Resultado de la derivada",
-    label = ["Aproximación" "Derivada verdadera"],
-    xscale = :log10,
-	)
-	
-	hline!([-4]; label =  "Derivada verdadera")
+	Q1=[12 8 7 6;8 12 8 7;7 8 12 8;6 7 8 12]
+	Q2=[3 2 1 0;2 3 2 1;1 2 3 2;0 1 2 3]
+	Q3=[2 1 0 0;1 2 1 0;0 1 2 1;0 0 1 2]
+	Q4=[1 0 0 0;0 1 0 0;0 0 1 0;0 0 0 1]
+	B=-[1;1;1;1;0;0;0;0;1;1;1;1;0;0;0;0]
 end
 
-# ╔═╡ bd8b1876-c79d-49bd-a80a-b6aba3ad20d1
-begin
-	#completar
-	#hline!([true_grad]; label =  "Gradiente analítico")
-end
-
-# ╔═╡ c80ec33f-80a1-42e7-a215-b046ed980709
-md"""
-La aproximación es buena si ``h`` no es ni demasiado pequeña ni demasiado grande. No puede ser demasiado grande porque la definición del gradiente considera que el límite es cero. No puede ser demasiado pequeño porque aparecen los errores numéricos. Esto está relacionado con la precisión de la máquina, que es más vulnerable a la hora de restar dos números de casi el mismo valor. Un ejemplo sencillo muestra
-
-```math
-(x + h)^2 - x^2 = 2xh + h^2
-```
-
-pero la implementación numérica
-
-```julia
-julia> x = 1;
-julia> h = 1e-13;
-julia> (x+h)^2 - x^2
-julia> 2*x*h + h^2
-```
-
-ya da un error en el cuarto dígito válido. Es importante comprender cómo se almacenan los números. Julia utiliza el [estándar IEEE 754](https://en.wikipedia.org/wiki/IEEE_754). Por ejemplo, `Float64` usa 64 bits para almacenar el número, de los cuales 1 bit representa el signo, 11 bits el exponente y 52 bits la precisión del significado. Como ``2^{52}\approx 10^{16}``, los números se almacenan con una precisión de 16 dígitos. Dado que el exponente se almacena por separado, es posible representar números más pequeños que la precisión de la máquina, como ``10^{-25}``. Para evitar errores numéricos, todos los cálculos se realizan con mayor precisión y la variable resultante se redondea a la precisión del tipo.
-"""
-
-# ╔═╡ debd5cc5-e6b1-4048-96ea-9d0b9a342b70
-begin
-	TableOfContents()
-end
+# ╔═╡ 18d93f64-ae4c-4af8-80cb-b707147043ff
+#completar
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-Interpolations = "~0.15.1"
-Plots = "~1.40.2"
-PlutoUI = "~0.7.58"
+Plots = "~1.40.4"
+PlutoUI = "~0.7.59"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -371,7 +160,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "5d050ceebdd39b9caa6d07517824ff3214109ad3"
+project_hash = "634710e806d44fb13e8e9c0131ce0d1dfcd55dbd"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -379,28 +168,12 @@ git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
 version = "1.3.2"
 
-[[deps.Adapt]]
-deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "6a55b747d1812e699320963ffde36f1ebdda4099"
-uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.0.4"
-weakdeps = ["StaticArrays"]
-
-    [deps.Adapt.extensions]
-    AdaptStaticArraysExt = "StaticArrays"
-
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.1"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
-
-[[deps.AxisAlgorithms]]
-deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
-git-tree-sha1 = "01b8ccb13d68535d73d2b0c23e39bd23155fb712"
-uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
-version = "1.1.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -418,19 +191,9 @@ version = "1.0.8+1"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "a2f1c8c668c8e3cb4cca4e57a8efdb09067bb3fd"
+git-tree-sha1 = "a4c43f59baa34011e303e76f5c8c91bf58415aaf"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
-version = "1.18.0+2"
-
-[[deps.ChainRulesCore]]
-deps = ["Compat", "LinearAlgebra"]
-git-tree-sha1 = "575cd02e080939a33b6df6c5853d14924c08e35b"
-uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.23.0"
-weakdeps = ["SparseArrays"]
-
-    [deps.ChainRulesCore.extensions]
-    ChainRulesCoreSparseArraysExt = "SparseArrays"
+version = "1.18.0+1"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -440,9 +203,9 @@ version = "0.7.4"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "4b270d6465eb21ae89b732182c20dc165f8bf9f2"
+git-tree-sha1 = "67c1f244b991cad9b0aa4b7540fb758c2488b129"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.25.0"
+version = "3.24.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -464,15 +227,15 @@ version = "0.10.0"
 
 [[deps.Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "362a287c3aa50601b0bc359053d5c2468f0e7ce0"
+git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.12.11"
+version = "0.12.10"
 
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
-git-tree-sha1 = "b1c55339b7c6c350ee89f2c1604299660525b248"
+git-tree-sha1 = "c955881e3c981181362ae4088b35995446298b80"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.15.0"
+version = "4.14.0"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
@@ -514,10 +277,6 @@ deps = ["Mmap"]
 git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
-
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -565,15 +324,15 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
-git-tree-sha1 = "05882d6995ae5c12bb5f36dd2ed3f61c98cbb172"
+git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
-version = "0.8.5"
+version = "0.8.4"
 
 [[deps.Fontconfig_jll]]
-deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Zlib_jll"]
-git-tree-sha1 = "db16beca600632c95fc8aca29890d83788dd8b23"
+deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "21efd19106a55620a188615da6d3d06cd7f6ee03"
 uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
-version = "2.13.96+0"
+version = "2.13.93+0"
 
 [[deps.Format]]
 git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
@@ -587,10 +346,10 @@ uuid = "d7e528f0-a631-5988-bf34-fe36492bcfd7"
 version = "2.13.1+0"
 
 [[deps.FriBidi_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "1ed150b39aebcc805c26b93a8d0122c940f64ce2"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
 uuid = "559328eb-81f9-559d-9380-de523a88c83c"
-version = "1.0.14+0"
+version = "1.0.10+0"
 
 [[deps.GLFW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll"]
@@ -599,16 +358,16 @@ uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
 version = "3.3.9+0"
 
 [[deps.GR]]
-deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "p7zip_jll"]
-git-tree-sha1 = "ddda044ca260ee324c5fc07edb6d7cf3f0b9c350"
+deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
+git-tree-sha1 = "3437ade7073682993e092ca570ad68a2aba26983"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.5"
+version = "0.73.3"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "278e5e0f820178e8a26df3184fcb2280717c79b1"
+git-tree-sha1 = "a96d5c713e6aa28c242b0d25c1347e258d6541ab"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.5+0"
+version = "0.73.3+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -618,9 +377,9 @@ version = "0.21.0+0"
 
 [[deps.Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "7c82e6a6cd34e9d935e9aa4051b66c6ff3af59ba"
+git-tree-sha1 = "359a1ba2e320790ddbe4ee8b4d54a305c0ea2aff"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.80.2+0"
+version = "2.80.0+0"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -635,9 +394,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "d1d712be3164d61d1fb98e7ce9bcbc6cc06b45ed"
+git-tree-sha1 = "2c3ec1f90bb4a8f7beafb0cffea8a4c3f4e636ab"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.8"
+version = "1.10.6"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -667,16 +426,6 @@ version = "0.2.4"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
-[[deps.Interpolations]]
-deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
-git-tree-sha1 = "88a101217d7cb38a7b481ccd50d21876e1d1b0e0"
-uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-version = "0.15.1"
-weakdeps = ["Unitful"]
-
-    [deps.Interpolations.extensions]
-    InterpolationsUnitfulExt = "Unitful"
-
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
@@ -702,15 +451,15 @@ version = "0.21.4"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "c84a835e1a09b289ffcd2271bf2a337bbdda6637"
+git-tree-sha1 = "3336abae9a713d2210bb57ab484b1e065edd7d23"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "3.0.3+0"
+version = "3.0.2+0"
 
 [[deps.LAME_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "170b660facf5df5de098d866564877e119141cbd"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
 uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
-version = "3.100.2+0"
+version = "3.100.1+0"
 
 [[deps.LERC_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -725,10 +474,10 @@ uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
 version = "15.0.7+0"
 
 [[deps.LZO_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "70c5da094887fd2cae843b8db33920bac4b6f07d"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "e5b909bcf985c5e2605737d2ce278ed791b89be6"
 uuid = "dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac"
-version = "2.10.2+0"
+version = "2.10.1+0"
 
 [[deps.LaTeXStrings]]
 git-tree-sha1 = "50901ebc375ed41dbf8058da26f9de442febbbec"
@@ -795,10 +544,10 @@ uuid = "7e76a0d4-f3c7-5321-8279-8d96eeed0f29"
 version = "1.6.0+0"
 
 [[deps.Libgpg_error_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "fbb1f2bef882392312feb1ede3615ddc1e9b99ed"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "c333716e46366857753e273ce6a69ee0945a6db9"
 uuid = "7add5ba3-2f88-524e-9cd5-f83b8a55f7b8"
-version = "1.49.0+0"
+version = "1.42.0+0"
 
 [[deps.Libiconv_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -808,9 +557,9 @@ version = "1.17.0+0"
 
 [[deps.Libmount_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "0c4f9c4f1a50d8f35048fa0532dabbadf702f81e"
+git-tree-sha1 = "4b683b19157282f50bfd5dcaa2efe5295814ea22"
 uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
-version = "2.40.1+0"
+version = "2.40.0+0"
 
 [[deps.Libtiff_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
@@ -820,9 +569,9 @@ version = "4.5.1+1"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "5ee6203157c120d79034c748a2acba45b82b8807"
+git-tree-sha1 = "27fd5cc10be85658cacfe11bb81bee216af13eda"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
-version = "2.40.1+0"
+version = "2.40.0+0"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
@@ -907,15 +656,6 @@ version = "1.0.2"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
-[[deps.OffsetArrays]]
-git-tree-sha1 = "e64b4f5ea6b7389f6f046d13d4896a8f9c1ba71e"
-uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.14.0"
-weakdeps = ["Adapt"]
-
-    [deps.OffsetArrays.extensions]
-    OffsetArraysAdaptExt = "Adapt"
-
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
@@ -973,9 +713,9 @@ version = "1.3.0"
 
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
-git-tree-sha1 = "35621f10a7531bc8fa58f74610b1bfb70a3cfc6b"
+git-tree-sha1 = "64779bc4c9784fee475689a1752ef4d5747c5e87"
 uuid = "30392449-352a-5448-841d-b1acce4e97dc"
-version = "0.43.4+0"
+version = "0.42.2+0"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -1050,16 +790,6 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
-[[deps.Ratios]]
-deps = ["Requires"]
-git-tree-sha1 = "1342a47bf3260ee108163042310d26f2be5ec90b"
-uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
-version = "0.4.5"
-weakdeps = ["FixedPointNumbers"]
-
-    [deps.Ratios.extensions]
-    RatiosFixedPointNumbersExt = "FixedPointNumbers"
-
 [[deps.RecipesBase]]
 deps = ["PrecompileTools"]
 git-tree-sha1 = "5c3d09cc4f31f5fc6af001c250bf1278733100ff"
@@ -1102,10 +832,6 @@ version = "1.2.1"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
-[[deps.SharedArrays]]
-deps = ["Distributed", "Mmap", "Random", "Serialization"]
-uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -1130,22 +856,6 @@ version = "1.2.1"
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 version = "1.10.0"
-
-[[deps.StaticArrays]]
-deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "bf074c045d3d5ffd956fa0a461da38a44685d6b2"
-uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.3"
-weakdeps = ["ChainRulesCore", "Statistics"]
-
-    [deps.StaticArrays.extensions]
-    StaticArraysChainRulesCoreExt = "ChainRulesCore"
-    StaticArraysStatisticsExt = "Statistics"
-
-[[deps.StaticArraysCore]]
-git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
-uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
-version = "1.4.2"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1190,9 +900,9 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "5d54d076465da49d6746c647022f3b3674e64156"
+git-tree-sha1 = "71509f04d045ec714c4748c785a59045c3736349"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.8"
+version = "0.10.7"
 weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
@@ -1223,9 +933,9 @@ version = "0.4.1"
 
 [[deps.Unitful]]
 deps = ["Dates", "LinearAlgebra", "Random"]
-git-tree-sha1 = "352edac1ad17e018186881b051960bfca78a075a"
+git-tree-sha1 = "3c793be6df9dd77a0cf49d80984ef9ff996948fa"
 uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
-version = "1.19.1"
+version = "1.19.0"
 
     [deps.Unitful.extensions]
     ConstructionBaseUnitfulExt = "ConstructionBase"
@@ -1264,12 +974,6 @@ git-tree-sha1 = "93f43ab61b16ddfb2fd3bb13b3ce241cafb0e6c9"
 uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
 version = "1.31.0+0"
 
-[[deps.WoodburyMatrices]]
-deps = ["LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "c1a7aa6219628fcd757dede0ca95e245c5cd9511"
-uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
-version = "1.0.0"
-
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
 git-tree-sha1 = "532e22cf7be8462035d092ff21fada7527e2c488"
@@ -1289,16 +993,16 @@ uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
 version = "5.4.6+0"
 
 [[deps.Xorg_libICE_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "326b4fea307b0b39892b3e85fa451692eda8d46c"
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "e5becd4411063bdcac16be8b66fc2f9f6f1e8fe5"
 uuid = "f67eecfb-183a-506d-b269-f58e52b52d7c"
-version = "1.1.1+0"
+version = "1.0.10+1"
 
 [[deps.Xorg_libSM_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libICE_jll"]
-git-tree-sha1 = "3796722887072218eabafb494a13c963209754ce"
+deps = ["Libdl", "Pkg", "Xorg_libICE_jll"]
+git-tree-sha1 = "4a9d9e4c180e1e8119b5ffc224a7b59d3a7f7e18"
 uuid = "c834827a-8449-5923-a945-d239c165b7dd"
-version = "1.2.4+0"
+version = "1.2.3+0"
 
 [[deps.Xorg_libX11_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
@@ -1325,10 +1029,10 @@ uuid = "a3789734-cfe1-5b06-b2d0-1dd0d9d62d05"
 version = "1.1.4+0"
 
 [[deps.Xorg_libXext_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
-git-tree-sha1 = "d2d1a5c49fae4ba39983f63de6afcbea47194e85"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "b7c0aa8c376b31e4852b360222848637f481f8c3"
 uuid = "1082639a-0dae-5f34-9b06-72781eeb8cb3"
-version = "1.3.6+0"
+version = "1.3.4+4"
 
 [[deps.Xorg_libXfixes_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
@@ -1355,10 +1059,10 @@ uuid = "ec84b674-ba8e-5d96-8ba1-2a689ba10484"
 version = "1.5.2+4"
 
 [[deps.Xorg_libXrender_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
-git-tree-sha1 = "47e45cd78224c53109495b3e324df0c37bb61fbe"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "19560f30fd49f4d4efbe7002a1037f8c43d43b96"
 uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
-version = "0.9.11+0"
+version = "0.9.10+4"
 
 [[deps.Xorg_libpthread_stubs_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1462,10 +1166,10 @@ uuid = "1a1c6b14-54f6-533d-8383-74cd7377aa70"
 version = "3.1.1+0"
 
 [[deps.libaom_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "1827acba325fdcdf1d2647fc8d5301dd9ba43a9d"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "3a2ea60308f0996d26f1e5354e10c24e9ef905d4"
 uuid = "a4ae2306-e953-59d6-aa16-d00cac43593b"
-version = "3.9.0+0"
+version = "3.4.0+0"
 
 [[deps.libass_jll]]
 deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -1544,46 +1248,21 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─25aa50c5-ef79-43ca-a966-9e6a2926a86f
-# ╠═59b6a725-a2da-443d-8255-dea4ba6c80ea
-# ╟─78f4d328-b4fc-4dfb-9472-53d130c3c198
-# ╟─3b2b39fb-e444-41c2-980e-35be65454347
-# ╠═d653b474-fbe4-486c-aee7-28eb8312ec66
-# ╟─4d7e22df-3481-4073-a1c3-9d0d8f88d4b4
-# ╠═5713c921-b942-4ef1-94c3-024007519444
-# ╠═f19c178a-afd1-458a-8c3b-6be8d799b6b7
-# ╠═8a7951cf-db5f-4242-820d-df7218e14df7
-# ╠═d23efd3f-eaec-4252-85ec-166498af09c1
-# ╠═be3f9271-0d8c-48f4-85a5-3013228202a9
-# ╟─ad39c9d5-7437-40ce-8d27-da7fc0c7cbbb
-# ╠═10a65128-7601-4363-b035-1db8384196e3
-# ╠═2f5de04b-8edb-4c50-9269-d5386093c920
-# ╟─3f490da8-f7ce-443a-aead-d8696a7d5680
-# ╟─f576a1b6-6022-404e-81e7-b6225968aa3a
-# ╟─b7c673a5-aa18-4805-9027-ef714d28eec4
-# ╟─0b494593-f72e-4cc4-bf31-ba85748d53bf
-# ╠═ebde75f6-86b2-4b0c-b292-b980edd7c685
-# ╟─953bc410-aa3f-4995-8a35-0445a5cd18d5
-# ╠═6b033cf1-9b6e-4a19-bcd3-61e11fb6e418
-# ╠═5b93d6a8-b01d-4d61-a12d-de4a90ee3951
-# ╟─ad27c73f-cbb7-4ced-b2cc-bd18b637a802
-# ╟─0b7ed17b-88e4-4d2d-bad5-51911a7d8998
-# ╟─6c88602f-ec7c-493e-a9b2-de3326ae56ac
-# ╟─1d1879a0-dca2-11ee-07a4-31f58d596e6b
-# ╟─545958ec-8c8c-4ca0-b4bb-a07968441805
-# ╟─6bb0ec7a-0008-40ec-aeb2-842dc6aba584
-# ╟─02c292b9-3483-47f2-a2cf-bbd4d4c1746c
-# ╠═8645e1ed-8c0a-41ad-9dd7-f1dc58fe92e0
-# ╠═cf29088c-21ed-4d90-aeea-eee4f6471ea1
-# ╟─2a704994-f7b8-4c19-8763-b32626e11e55
-# ╠═5886f879-f622-4e01-bb73-a01eedd899e8
-# ╠═97590a8e-966f-4e1c-b31a-6d8a2d50306e
-# ╟─46447e68-7423-4d4b-b021-1343f5a4a1f5
-# ╟─b733018d-ffde-4a87-be67-e10ec1d4697c
-# ╟─ff2e107c-7aa7-4e9a-95b4-ffbb842937ac
-# ╠═83377860-105f-4b93-a5e3-14f31f637472
-# ╟─bd8b1876-c79d-49bd-a80a-b6aba3ad20d1
-# ╟─c80ec33f-80a1-42e7-a215-b046ed980709
-# ╟─debd5cc5-e6b1-4048-96ea-9d0b9a342b70
+# ╟─598d505a-0c6c-11ef-064c-f16bc5f13328
+# ╟─16b2ccff-56aa-4342-a3e1-a82bf6e092f1
+# ╟─f74c8e2b-dfb6-41ac-8464-ecee852198fe
+# ╠═a6a61f01-d094-4c84-876b-ae5125c3b3fb
+# ╟─a92e4984-0495-43b4-97ca-9b1ccadb62b0
+# ╠═96ad091e-c7f1-4719-9f11-d53b4ff37824
+# ╠═2a720ea1-26f4-4985-8e57-3eea5e087dd6
+# ╟─ed73a4ca-9acf-48d1-a0da-e95fba8a89a9
+# ╠═8adb753d-7e58-4f11-b40d-c23915bfaf58
+# ╟─6f6e45e3-d703-4fc3-ac97-d9cc5990c28b
+# ╠═e5b0ff2c-6a81-4c4b-b959-cc9e29add5dc
+# ╟─edf9308a-8d17-435e-9fca-a8da540b9ef7
+# ╠═54b438ae-04b0-407e-b9ed-fec59b1040e7
+# ╟─ec65327c-968f-43fd-a9c3-0b614bcf97c7
+# ╠═530db6ec-d24c-4fc5-9652-9e0cf41c65c6
+# ╠═18d93f64-ae4c-4af8-80cb-b707147043ff
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

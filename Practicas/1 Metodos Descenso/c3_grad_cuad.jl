@@ -4,219 +4,365 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 14be6aab-8075-430c-adff-00ad44c2f722
-using Plots,LinearAlgebra
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
 
-# ╔═╡ ced5f080-f80b-11ee-27e0-2b161d000d85
+# ╔═╡ 59b6a725-a2da-443d-8255-dea4ba6c80ea
+using Plots,LinearAlgebra, PlutoUI,Interpolations
+
+# ╔═╡ 25aa50c5-ef79-43ca-a966-9e6a2926a86f
 md"""
-## Seguimos con busqueda lineal inexacta
+# Método del Gradiente (Cuadráticas)
 """
 
-# ╔═╡ 36287224-88a8-44ab-bb67-a8394f47851d
+# ╔═╡ 78f4d328-b4fc-4dfb-9472-53d130c3c198
 md"""
-### Busqueda por razón dorada
+Consideremos 
+
+$$f(x)=\frac{1}{2}x^tAx-b^tx+c$$
+
+donde $A\in\mathbb{R}^{n\times n}$ es una matriz simétrica y definida positiva.
+
+1. Dado que $A>0$, los autovalores son todos positivos.
+2. La función $f$ es estrictamente convexa.
+3. El mínimo $x^*$ es la solución de $Ax^*=b$ (pues $\nabla f(x)=Ax-b$).
+
+Sabemos que el método de descenso más rápido puede tomarse como 
+
+$$x_{k+1}=x_{k}-\alpha_k\nabla f(x_{k})$$
+
+donde $\alpha_k = argmin_{\alpha}f(x_k-\alpha\nabla f(x_k))$. 
+
+Luego se puede ver que 
+
+$$\alpha_k=\frac{\nabla f(x_k)^t\nabla f(x_k)}{\nabla f(x_k)^t A\nabla f(x_k)}$$
 """
 
-# ╔═╡ 2532fc5b-a23e-4bff-8f15-fe232d94ab4f
-md"""
-Recordemos:
-
-Supongamos que sabemos que un minimizador se encuentra en  [a,b]
-
-* Se considera  $a<a_1<b_1<b$
- 
-* Si  $φ(a_1)<φ(b_1)$, entonces el intervalo  $[b_1,b]$ no puede contener un minimizador y es descartado
-
-* Si  $φ(a_1)≥φ(b_1)$, entonces el intervalo  $[a,a_1]$ puede ser descartado
-
-Luego se particiona el intervalo resultante y se repite el proceso.
-
-El método consiste en tomar: $a_1=a+(1-θ)(b−a)$ y $b_1=a+θ(b−a)$ con $θ=\frac{\sqrt{5}-1}{2}$
-"""
-
-# ╔═╡ 040a0d9f-ab34-4266-8bd5-71f584150f45
+# ╔═╡ 3b2b39fb-e444-41c2-980e-35be65454347
 md"""
 !!! note "Ejercicio 1"
-	Implementar una función `razon_dorada` que realice la busqueda lineal por razón dorada. Testear con la función $\phi(x)=(x-1)^2$.
+	Implementar una función que realice el método del gradiente para el caso de funciones cuadraticas. La función debe construir un vector que vaya guardando los $x_k$ (para esto puede ser útil la función `push!`) e imprima al final la cantidad de pasos que fueron necesarios para llegar al mínimo. 
 """
 
-# ╔═╡ de25c192-a601-45e2-b884-1b69995ca88b
-ϕ(x)=(x-1)^2
-
-# ╔═╡ 932a06f4-0fc6-4a5a-a185-cb645c2b8cab
-function razon_dorada2(ϕ,a,b;ε=1e-5)
-	θ=(sqrt(5)-1)/2
-	a_0=a
-	b_0=b
-	b_1=a_0+θ*(b_0-a_0)
-	a_1=b_0-θ*(b_0-a_0)
-	ϕ_a=ϕ(a_1)
-	ϕ_b=ϕ(b_1)
-	while b_0 - a_0 > ε
-		if ϕ_a ≤ ϕ_b
-			b_0=b_1
-			b_1=a_1
-			ϕ_b=ϕ_a
-			a_1=b_0-θ*(b_0-a_0)
-			ϕ_a=ϕ(a_1)
-		else
-			a_0=a_1
-			a_1=b_1
-			ϕ_a=ϕ_b
-			b_1=a_0+θ*(b_0-a_0)
-			ϕ_b=ϕ(b_1)
-		end
+# ╔═╡ d653b474-fbe4-486c-aee7-28eb8312ec66
+function grad_cuad(A,b,c;x0=zeros(length(b)),tolx=1e-8,tolf=1e-8,N=1e5)
+	x = Vector{Vector{Float64}}([x0])
+	loop = true 
+	i    = 1 
+	while loop 
+		xk   = x[end] 
+		r    = b-A*xk
+		α    = r⋅r/(r⋅(A*r)) 
+		xk1   = xk + α*r 
+		push!(x,xk1) 
+		i   += 1 
+		loop = norm(xk-xk1)>tolx && norm(r)>tolf && i ≤ N
 	end
-	x=(a_0+b_0)/2
+	println("El método llegó a un resultado satisfactorio en $(length(x)-2) pasos")
 	return x
 end
-			
 
-# ╔═╡ edc3a60e-a4da-426c-ab65-0604f63466ac
-razon_dorada2(ϕ,0,2)
-
-# ╔═╡ f46e2fa7-d9bd-452d-98ca-0628d29938fd
-md"""
-### Condición de Wolfe
-"""
-
-# ╔═╡ 6f3cc259-ba15-421f-9619-f42ec5a9fabd
-md"""
-La condicion de Armijo impone cotas a cuan grande puede ser el paso en la direccion  $d$. Sin embargo, puede ocurrir que el paso sea tan pequeño que  $x_k$ no converja a un minimizador local.
-
-Por ejemplo, si $f(x)=x^2$, si comenzamos en $x_0=2$, $d=−1$ es dirección de descenso en  $x_k=1+2^{−k}$ y  $\alpha_k=2−k^{−1}$ cumple con la condición y efectivamente se logra un descenso en $f$. Sin embargo,  $x_k→1$ que no es el minimizador de  $f$. No se converge al mínimo pues los pasos son muy pequeños.
-
-Entonces, necesitamos otra condición que acote inferiormente a  $α$.
-
-Wolfe agrega otra condición sobre  $α$, la condición de curvatura:
-
-$$∇f(x_k+α_kd_k)^td_k≥c_2∇f(x_k)^td_k$$ 
-
-donde  $c_2∈(c_1,1)$ con  $c_1$ siendo la constante de la condición de Armijo. El lado izquierdo es  $φ'(α_k)$, por lo que la condición impone que la pendiente de  $φ$ en  $\alpha_k$ sea mayor que  $c_2$ veces la pendiente inicial.
-
-* Si  $φ'$ es muy negativa  ⇒ se puede decrecer mucho en esta dirección
-* Si  $φ'$ no es muy negativa o es positiva  ⇒ terminar la búsqueda lineal, no se pueden lograr (muchas) mejoras.
-
-**Condiciones de Wolfe:**
-
-$$f(x¯+t¯d)≤f(x¯)+c_1t¯∇f(x¯)^td$$
-
-$$∇f(x¯+t¯d)^td\geq c_2∇f(x¯)^td$$
-
-Con $0<c1<c2<1$
-.
-"""
-
-# ╔═╡ a8b130b3-3e65-4e0f-93aa-59f85f38b255
+# ╔═╡ 4d7e22df-3481-4073-a1c3-9d0d8f88d4b4
 md"""
 !!! note "Ejercicio 2"
-	Implementar una función `wolfe` que realice la busqueda lineal por la condición de Wolfe. Tomar $c_1=0.5$ y $c_2=0.75$.
+	Tomar $b=(3,4)$, $c=10$ y calcular el minimo exacto y el dado por el método del gradiente para las siguientes matrices:
 """
 
-# ╔═╡ 58fb41fe-462d-49e7-8dc4-ebdefd84c48c
-md"""
-*Idea:*
+# ╔═╡ 5713c921-b942-4ef1-94c3-024007519444
+begin
+	b = [3,4]
+	c = 10
+	A1= [3 -1;-1 3]
+	A2= [11 -9;-9 11]
+end
 
-```julia
-dada ϕ, 0<ε<1, η>1, 0<c1<c2<1. 
-defino t1=0, t2=ε.
-	while ϕ(t2)≤ϕ(0)+t2c1ϕ'(0)
-		t1=η*t1
+# ╔═╡ f19c178a-afd1-458a-8c3b-6be8d799b6b7
+sol1 = grad_cuad(A1,b,c)
+
+# ╔═╡ 8a7951cf-db5f-4242-820d-df7218e14df7
+sol_ex1 = A1\b
+
+# ╔═╡ d23efd3f-eaec-4252-85ec-166498af09c1
+sol2=grad_cuad(A2,b,c)
+
+# ╔═╡ be3f9271-0d8c-48f4-85a5-3013228202a9
+sol_ex2=A2\b
+
+# ╔═╡ ad39c9d5-7437-40ce-8d27-da7fc0c7cbbb
+md"""
+¿Cómo es la convergencia en cada caso?¿Cómo son los autovalores? (sug: usar el comando `eigvals`).
+"""
+
+# ╔═╡ 10a65128-7601-4363-b035-1db8384196e3
+eigvals(A1)
+
+# ╔═╡ 2f5de04b-8edb-4c50-9269-d5386093c920
+eigvals(A2)
+
+# ╔═╡ 3f490da8-f7ce-443a-aead-d8696a7d5680
+md"""
+---
+"""
+
+# ╔═╡ f576a1b6-6022-404e-81e7-b6225968aa3a
+md"""
+Las curvas de nivel de $f$ son elipsoides n-dimensionales con ejes en las direcciones de los n-autovectores mutuamente ortogonales de $A$. El eje correspondiente al i-ésimo autovector tiene una longitud proporcional a $\frac{1}{\lambda_i}$. Analicemos este proceso y veamos que la tasa de convergencia depende de la relación de las longitudes de los ejes de los contornos elípticos de $f$.
+"""
+
+# ╔═╡ b7c673a5-aa18-4805-9027-ef714d28eec4
+md"""
+λ1 $(@bind λ1 Slider(1:0.5:10))
+
+λ2 $(@bind λ2 Slider(1:0.5:10))
+
+θ $(@bind θ Slider(0:0.1:2π))
+"""
+
+# ╔═╡ 0b494593-f72e-4cc4-bf31-ba85748d53bf
+println("λ_1 = $(λ1), λ_2= $(λ2), θ= $(θ)")
+
+# ╔═╡ ebde75f6-86b2-4b0c-b292-b980edd7c685
+begin
+	Q 	 = [cos(θ) sin(θ);-sin(θ) cos(θ)]
+	A    = Q'*[λ1 0;0 λ2]*Q
+	f(x) = (0.5)*x'*A*x - b'⋅x + c
+	f(x1,x2)=f([x1,x2])
+end
+
+# ╔═╡ 953bc410-aa3f-4995-8a35-0445a5cd18d5
+begin 
+	x = grad_cuad(A,b,c) 
+	ex= A\b
+	println("solución aprox: $(x[end-1])")
+	println("solucion exacta $(ex)")
+end
+
+# ╔═╡ 6b033cf1-9b6e-4a19-bcd3-61e11fb6e418
+begin
+	if λ1 == λ2
+		xs=range(-10,10,length=1000)
+		ys=xs
+		X = hcat(x...)'
+		contour(xs,ys,f)
+		x1=X[:,1]
+		y1=X[:,2]
+		plot!(x1,y1,label="Método del gradiente")
+	else
+		xs=range(-10,10,length=1000)
+		ys=xs
+		X = hcat(x...)'
+		l=f.(x)
+		l2     = (l[2:end]+l[1:end-1])./2
+		L      = [l;l2;1.5*maximum(l);2*maximum(l)]
+		contour(xs,ys,f,levels=L,c=cgrad(:jet,length(L)),xlim=(0-1,ex[1]+1),ylim=(0-1,ex[2]+1))
+		x1=X[:,1]
+		y1=X[:,2]
+		plot!(x1,y1,label="Método del gradiente")
 	end
-	while true
-		t=(t1+t2)/2
-		if t satisface wolfe, parar
-		elseif ϕ(t)>ϕ(0)+c1ϕ'(0)t
-			t2=t
-		elseif ϕ(t)≤ϕ(0)+c1ϕ'(0)t and ϕ'(t)<c2ϕ'(0)
-			t1=t
-		end
-	end
-	return t
+end
+
+# ╔═╡ 5b93d6a8-b01d-4d61-a12d-de4a90ee3951
+begin 
+	#juntados = hcat(x...)' 
+	xss = range(-10, stop=10, length=100)
+	yss = range(-10, stop=10, length=100)
+	
+	# Evaluar la función en la malla (x, y)
+	z = f.(xss', yss)  # ' transpone el vector x para que sea una columna
+	
+	# Graficar la función
+	surface(xss, yss, z, xlabel="x", ylabel="y", zlabel="f(x, y)", title="Gráfico 3D de f(x, y)")
+end
+
+# ╔═╡ ad27c73f-cbb7-4ced-b2cc-bd18b637a802
+md"""
+#### ¿Qué es lo que sucede?
+"""
+
+# ╔═╡ 0b7ed17b-88e4-4d2d-bad5-51911a7d8998
+md"""
+Si se elige α de modo que $f(x_k+ αd_k)$ se minimice en cada iteración, entonces las direcciones sucesivas son ortogonales. En efecto, 
+```math
+\frac{\partial f(x_k+αd_k)}{\partial α} = \nabla f (x_k+αd_k)^t d_k
+```
+Si $α^*$ el valor donde se minimiza $f(x_k+αd_k)$, entonces 
+```math
+ 0=\nabla f(x_k+\alpha^*d_k)^td_k=d_{k+1}^td_k
 ```
 """
 
-# ╔═╡ 97dadc7d-116b-411e-aca8-cb7b28dac48e
-function goldstein(ϕ,m;β=0.55,η=1.01,h=1e-8)
-    dϕ(x)=(ϕ(x+h)-ϕ(x-h))/h
-	t = 0.1
-	while β*m > dϕ(t)
-		t *= η
-	end
-	while β*m < dϕ(t)
-		t /= η
-	end
-	return t
-end
-
-# ╔═╡ 5447bdd6-1fb4-4086-a69d-bc4df824403d
-function armijo(ϕ,m;ε=0.2,η=1.1)::Float64
-	l(t) = ϕ(0) + ε*t*m
-	t = 0.1
-	while ϕ(t)<l(t)
-		t *= η
-		# println(t)
-		# println(ϕ(t))
-	end
-	while ϕ(t)>l(t)
-		t /= η
-		# println(t)
-		# println(ϕ(t))
-	end
-	return t
-end
-
-# ╔═╡ ac20a579-294c-4b37-9214-252c934ab71a
-function wolfe(ϕ,m;c1=0.2,c2=0.75,ε=0.5,η=1.1,h=1e-8)
-	#m=ϕ'(0)
-	t1=0
-	t2=ε
-	ϕ_deriv(x)=(ϕ(x+h)-ϕ(x-h))/h
-	
-	# Armijo
-	while ϕ(t2) ≤ ϕ(0) + t2*c1*m 
-		t2 *= η
-	end
-	
-	while true
-		t = (t1+t2)/2
-		if ϕ(t)≤ϕ(0)+c1*t*m && ϕ_deriv(t)≥c2*m
-			return t
-		elseif ϕ(t)>ϕ(0)+c1*m*t
-			t2=t
-		elseif ϕ(t)≤ϕ(0)+c1*m*t && ϕ_deriv(t)<c2*m
-			t1=t
-		end
-	end
-end
-
-# ╔═╡ 3836641c-9298-4522-8bff-e52dc3018771
+# ╔═╡ 6c88602f-ec7c-493e-a9b2-de3326ae56ac
 md"""
-!!! note "Ejercicio 3"
-	Implementar una función `metodo_grad` que realice el método de descenso por el gradiente. La función debe tomar como argumento que tipo de busqueda lineal voy a usar (*razón dorada*, *armijo*, *wolfe*).
+!!! terminology "Teorema"
+
+	Para $x_0\in\mathbb{R}^n$ el método converge a un único mínimo $x^{*}$ y si $E(x)=\frac{1}{2}(x-x^*)^t A (x-x^*)$ entonces se tiene 
+	```math
+	E(x_{k+1})\leq (\frac{\lambda_n-\lambda_1}{\lambda_n+\lambda_1})^2 E(x_k)
+	```
+	con $\lambda_i$ autovalores tales que $\lambda_n\geq...\geq\lambda_1\geq 0$.
 """
 
-# ╔═╡ f9c24c97-0187-4b9b-af58-78521a7b0312
-begin 
-	tf = armijo(ϕ,-2)
-	ti = goldstein(ϕ,-2)
-	println("cota inf ", ti)
-	println("cota sup ", tf)
+# ╔═╡ 1d1879a0-dca2-11ee-07a4-31f58d596e6b
+md"""
+# Gradientes
+
+Para una función ``f:\mathbb{R}\to \mathbb{R}``, su gradiente está definido por
+
+```math
+f'(x) = \lim_{h\to 0}\frac{f(x+h)-f(x)}{h}.
+```
+
+Para  ``f:\mathbb{R}^n\to \mathbb{R}^m``, se define una matrix ``\nabla f(x)`` de tamaño ``m\times n`` definido por
+
+```math
+(\nabla f(x))_{i,j} = \frac{\partial f_i}{\partial x_j}(x) = \lim_{h\to 0}\frac{f_i(x_1,\dots,x_{j-1},x_j+h,x_{j+1},\dots,x_n)-f(x_1,\dots,x_n)}{h}.
+```
+
+La derivada es la dirección del crecimiento más rápido. La siguiente figura muestra el campo vectorial de derivadas, donde cada flecha muestra la dirección y el tamaño de las derivadas en los puntos del dominio. Dado que una función tiene los mismos valores de función a lo largo de sus curvas de nivel y que la derivada es la dirección del ascenso más pronunciado, las derivadas son perpendiculares a las curvas de nivel. La figura también muestra que los mínimos locales y los máximos locales tienen derivadas cero.
+"""
+
+# ╔═╡ 545958ec-8c8c-4ca0-b4bb-a07968441805
+md"""
+![](https://juliateachingctu.github.io/Julia-for-Optimization-and-Learning/stable/lecture_08/grad3.svg)
+"""
+
+# ╔═╡ 6bb0ec7a-0008-40ec-aeb2-842dc6aba584
+md"""
+## Gradiente numérico
+
+La forma más sencilla de calcular los gradientes es utilizar una aproximación en diferencias finitas. Reemplaza el límite
+
+```math
+f'(x) = \lim_{h\to 0}\frac{f(x+h)-f(x)}{h}
+```
+
+fijando alguna ``h`` y aproxima el gradiente mediante
+
+```math
+f'(x) \approx \frac{f(x+h)-f(x)}{h}.
+```
+"""
+
+# ╔═╡ 02c292b9-3483-47f2-a2cf-bbd4d4c1746c
+md"""
+!!! note "Ejercicio 3"
+	Escribe una función que calcule la aproximación de ``f'(x)`` por diferencias finitas. Las entradas son una función ``f:\mathbb R\to\mathbb R`` y un punto ``x\in\mathbb{R}``. Debería tener una entrada opcional ``h\in\mathbb{R}``, para la cual se debe elegir un valor razonable.
+"""
+
+# ╔═╡ 8645e1ed-8c0a-41ad-9dd7-f1dc58fe92e0
+dif_finit(f,x::Real;h=1e-8)=(f(x+h)-f(x))/h
+
+# ╔═╡ cf29088c-21ed-4d90-aeea-eee4f6471ea1
+begin
+	g(x)=x^2
+	dif_finit(g,2)
 end
 
-# ╔═╡ d5f565d7-df0a-4798-b6a1-eb6ba0d65ff0
-function metodo_grad(f,∇f,x0,method;tol=1e-8,N=10000)
+# ╔═╡ 2a704994-f7b8-4c19-8763-b32626e11e55
+md"""
+!!! note "Ejercicio 4"
+	Implementar una función que calcule el gradiente numérico de una función utilizando la derivada numérica.
+"""
+
+# ╔═╡ 5886f879-f622-4e01-bb73-a01eedd899e8
+function grad_dif(f,x;h=1e-8)
+	grad1 = dif_finit(y -> f(y,x[2]), x[1];h)
+	grad2 = dif_finit(y -> f(x[1],y), x[2];h)
+	return [grad1,grad2]
+end
+
+# ╔═╡ 97590a8e-966f-4e1c-b31a-6d8a2d50306e
+begin 
+	g2(x,y)=x^2+y^2
+	grad_dif(g2,[0,1])
+end
+
+# ╔═╡ 46447e68-7423-4d4b-b021-1343f5a4a1f5
+md"""
+---
+"""
+
+# ╔═╡ b733018d-ffde-4a87-be67-e10ec1d4697c
+md"""
+Esta forma de calcular el gradiente tiene dos desventajas:
+1. Es lento. Para una función de ``n`` variables, necesitamos evaluar la función al menos ``n+1`` veces para obtener el gradiente completo.
+2. Tiene orden 1 en $h$.
+3. No es preciso, como muestra el siguiente ejemplo.
+"""
+
+# ╔═╡ ff2e107c-7aa7-4e9a-95b4-ffbb842937ac
+md"""
+!!! note "Ejercicio 5"
+	Fijar un punto ``x=-2``. Para una discretización adecuada de ``h\in [10^{-15}, 10^{-1}]`` calcular la aproximación en diferencias finitas de la derivada de ``f``.
 	
+	Graficar la dependencia de esta aproximación con ``h`` y agregar la derivada verdadera.
+"""
+
+# ╔═╡ 83377860-105f-4b93-a5e3-14f31f637472
+### completar
+begin
+	hs = 10. .^ (-15:0.01:-1)
+	dif(h)=dif_finit(g,-2;h=h)
+	plot(hs, dif,
+    xlabel = "h",
+    ylabel = "Resultado de la derivada",
+    label = ["Aproximación" "Derivada verdadera"],
+    xscale = :log10,
+	)
+	
+	hline!([-4]; label =  "Derivada verdadera")
+end
+
+# ╔═╡ bd8b1876-c79d-49bd-a80a-b6aba3ad20d1
+begin
+	#completar
+	#hline!([true_grad]; label =  "Gradiente analítico")
+end
+
+# ╔═╡ c80ec33f-80a1-42e7-a215-b046ed980709
+md"""
+La aproximación es buena si ``h`` no es ni demasiado pequeña ni demasiado grande. No puede ser demasiado grande porque la definición del gradiente considera que el límite es cero. No puede ser demasiado pequeño porque aparecen los errores numéricos. Esto está relacionado con la precisión de la máquina, que es más vulnerable a la hora de restar dos números de casi el mismo valor. Un ejemplo sencillo muestra
+
+```math
+(x + h)^2 - x^2 = 2xh + h^2
+```
+
+pero la implementación numérica
+
+```julia
+julia> x = 1;
+julia> h = 1e-13;
+julia> (x+h)^2 - x^2
+julia> 2*x*h + h^2
+```
+
+ya da un error en el cuarto dígito válido. Es importante comprender cómo se almacenan los números. Julia utiliza el [estándar IEEE 754](https://en.wikipedia.org/wiki/IEEE_754). Por ejemplo, `Float64` usa 64 bits para almacenar el número, de los cuales 1 bit representa el signo, 11 bits el exponente y 52 bits la precisión del significado. Como ``2^{52}\approx 10^{16}``, los números se almacenan con una precisión de 16 dígitos. Dado que el exponente se almacena por separado, es posible representar números más pequeños que la precisión de la máquina, como ``10^{-25}``. Para evitar errores numéricos, todos los cálculos se realizan con mayor precisión y la variable resultante se redondea a la precisión del tipo.
+"""
+
+# ╔═╡ debd5cc5-e6b1-4048-96ea-9d0b9a342b70
+begin
+	TableOfContents()
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
+Interpolations = "~0.15.1"
 Plots = "~1.40.2"
+PlutoUI = "~0.7.58"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -225,7 +371,23 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "941e49117dce2dffdb8eb7d35b3ab96dfb97d08e"
+project_hash = "5d050ceebdd39b9caa6d07517824ff3214109ad3"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.2"
+
+[[deps.Adapt]]
+deps = ["LinearAlgebra", "Requires"]
+git-tree-sha1 = "6a55b747d1812e699320963ffde36f1ebdda4099"
+uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+version = "4.0.4"
+weakdeps = ["StaticArrays"]
+
+    [deps.Adapt.extensions]
+    AdaptStaticArraysExt = "StaticArrays"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -233,6 +395,12 @@ version = "1.1.1"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[[deps.AxisAlgorithms]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
+git-tree-sha1 = "01b8ccb13d68535d73d2b0c23e39bd23155fb712"
+uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
+version = "1.1.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
@@ -253,6 +421,16 @@ deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jl
 git-tree-sha1 = "a2f1c8c668c8e3cb4cca4e57a8efdb09067bb3fd"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.18.0+2"
+
+[[deps.ChainRulesCore]]
+deps = ["Compat", "LinearAlgebra"]
+git-tree-sha1 = "575cd02e080939a33b6df6c5853d14924c08e35b"
+uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+version = "1.23.0"
+weakdeps = ["SparseArrays"]
+
+    [deps.ChainRulesCore.extensions]
+    ChainRulesCoreSparseArraysExt = "SparseArrays"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -336,6 +514,10 @@ deps = ["Mmap"]
 git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -463,9 +645,37 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.4"
+
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[deps.Interpolations]]
+deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
+git-tree-sha1 = "88a101217d7cb38a7b481ccd50d21876e1d1b0e0"
+uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+version = "0.15.1"
+weakdeps = ["Unitful"]
+
+    [deps.Interpolations.extensions]
+    InterpolationsUnitfulExt = "Unitful"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
@@ -643,6 +853,11 @@ git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.3"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
@@ -691,6 +906,15 @@ version = "1.0.2"
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
+
+[[deps.OffsetArrays]]
+git-tree-sha1 = "e64b4f5ea6b7389f6f046d13d4896a8f9c1ba71e"
+uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+version = "1.14.0"
+weakdeps = ["Adapt"]
+
+    [deps.OffsetArrays.extensions]
+    OffsetArraysAdaptExt = "Adapt"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -790,6 +1014,12 @@ version = "1.40.4"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "ab55ee1510ad2af0ff674dbcced5e94921f867a9"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.59"
+
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
@@ -819,6 +1049,16 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[deps.Ratios]]
+deps = ["Requires"]
+git-tree-sha1 = "1342a47bf3260ee108163042310d26f2be5ec90b"
+uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
+version = "0.4.5"
+weakdeps = ["FixedPointNumbers"]
+
+    [deps.Ratios.extensions]
+    RatiosFixedPointNumbersExt = "FixedPointNumbers"
 
 [[deps.RecipesBase]]
 deps = ["PrecompileTools"]
@@ -862,6 +1102,10 @@ version = "1.2.1"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
+[[deps.SharedArrays]]
+deps = ["Distributed", "Mmap", "Random", "Serialization"]
+uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -886,6 +1130,22 @@ version = "1.2.1"
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 version = "1.10.0"
+
+[[deps.StaticArrays]]
+deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
+git-tree-sha1 = "bf074c045d3d5ffd956fa0a461da38a44685d6b2"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "1.9.3"
+weakdeps = ["ChainRulesCore", "Statistics"]
+
+    [deps.StaticArrays.extensions]
+    StaticArraysChainRulesCoreExt = "ChainRulesCore"
+    StaticArraysStatisticsExt = "Statistics"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.4.2"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -937,6 +1197,11 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
+
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -998,6 +1263,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "93f43ab61b16ddfb2fd3bb13b3ce241cafb0e6c9"
 uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
 version = "1.31.0+0"
+
+[[deps.WoodburyMatrices]]
+deps = ["LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "c1a7aa6219628fcd757dede0ca95e245c5cd9511"
+uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
+version = "1.0.0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
@@ -1273,23 +1544,46 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─ced5f080-f80b-11ee-27e0-2b161d000d85
-# ╠═14be6aab-8075-430c-adff-00ad44c2f722
-# ╟─36287224-88a8-44ab-bb67-a8394f47851d
-# ╟─2532fc5b-a23e-4bff-8f15-fe232d94ab4f
-# ╟─040a0d9f-ab34-4266-8bd5-71f584150f45
-# ╠═de25c192-a601-45e2-b884-1b69995ca88b
-# ╠═932a06f4-0fc6-4a5a-a185-cb645c2b8cab
-# ╠═edc3a60e-a4da-426c-ab65-0604f63466ac
-# ╟─f46e2fa7-d9bd-452d-98ca-0628d29938fd
-# ╟─6f3cc259-ba15-421f-9619-f42ec5a9fabd
-# ╟─a8b130b3-3e65-4e0f-93aa-59f85f38b255
-# ╟─58fb41fe-462d-49e7-8dc4-ebdefd84c48c
-# ╠═97dadc7d-116b-411e-aca8-cb7b28dac48e
-# ╠═5447bdd6-1fb4-4086-a69d-bc4df824403d
-# ╠═ac20a579-294c-4b37-9214-252c934ab71a
-# ╟─3836641c-9298-4522-8bff-e52dc3018771
-# ╠═f9c24c97-0187-4b9b-af58-78521a7b0312
-# ╠═d5f565d7-df0a-4798-b6a1-eb6ba0d65ff0
+# ╟─25aa50c5-ef79-43ca-a966-9e6a2926a86f
+# ╠═59b6a725-a2da-443d-8255-dea4ba6c80ea
+# ╟─78f4d328-b4fc-4dfb-9472-53d130c3c198
+# ╟─3b2b39fb-e444-41c2-980e-35be65454347
+# ╠═d653b474-fbe4-486c-aee7-28eb8312ec66
+# ╟─4d7e22df-3481-4073-a1c3-9d0d8f88d4b4
+# ╠═5713c921-b942-4ef1-94c3-024007519444
+# ╠═f19c178a-afd1-458a-8c3b-6be8d799b6b7
+# ╠═8a7951cf-db5f-4242-820d-df7218e14df7
+# ╠═d23efd3f-eaec-4252-85ec-166498af09c1
+# ╠═be3f9271-0d8c-48f4-85a5-3013228202a9
+# ╟─ad39c9d5-7437-40ce-8d27-da7fc0c7cbbb
+# ╠═10a65128-7601-4363-b035-1db8384196e3
+# ╠═2f5de04b-8edb-4c50-9269-d5386093c920
+# ╟─3f490da8-f7ce-443a-aead-d8696a7d5680
+# ╟─f576a1b6-6022-404e-81e7-b6225968aa3a
+# ╟─b7c673a5-aa18-4805-9027-ef714d28eec4
+# ╟─0b494593-f72e-4cc4-bf31-ba85748d53bf
+# ╠═ebde75f6-86b2-4b0c-b292-b980edd7c685
+# ╠═953bc410-aa3f-4995-8a35-0445a5cd18d5
+# ╠═6b033cf1-9b6e-4a19-bcd3-61e11fb6e418
+# ╠═5b93d6a8-b01d-4d61-a12d-de4a90ee3951
+# ╟─ad27c73f-cbb7-4ced-b2cc-bd18b637a802
+# ╟─0b7ed17b-88e4-4d2d-bad5-51911a7d8998
+# ╟─6c88602f-ec7c-493e-a9b2-de3326ae56ac
+# ╟─1d1879a0-dca2-11ee-07a4-31f58d596e6b
+# ╟─545958ec-8c8c-4ca0-b4bb-a07968441805
+# ╟─6bb0ec7a-0008-40ec-aeb2-842dc6aba584
+# ╟─02c292b9-3483-47f2-a2cf-bbd4d4c1746c
+# ╠═8645e1ed-8c0a-41ad-9dd7-f1dc58fe92e0
+# ╠═cf29088c-21ed-4d90-aeea-eee4f6471ea1
+# ╟─2a704994-f7b8-4c19-8763-b32626e11e55
+# ╠═5886f879-f622-4e01-bb73-a01eedd899e8
+# ╠═97590a8e-966f-4e1c-b31a-6d8a2d50306e
+# ╟─46447e68-7423-4d4b-b021-1343f5a4a1f5
+# ╟─b733018d-ffde-4a87-be67-e10ec1d4697c
+# ╟─ff2e107c-7aa7-4e9a-95b4-ffbb842937ac
+# ╠═83377860-105f-4b93-a5e3-14f31f637472
+# ╟─bd8b1876-c79d-49bd-a80a-b6aba3ad20d1
+# ╟─c80ec33f-80a1-42e7-a215-b046ed980709
+# ╟─debd5cc5-e6b1-4048-96ea-9d0b9a342b70
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
