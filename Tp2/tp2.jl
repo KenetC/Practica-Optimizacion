@@ -4,258 +4,394 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ ea924f65-d098-4654-bf23-0baf91a72f64
-using Flux,Images,Plots,Statistics
+# ╔═╡ f92178d8-5c5b-42e8-9d98-672cb500a2f1
+using MLDatasets, Images, Flux, Random, Statistics, Plots, CUDA, cuDNN, PlutoUI
 
-# ╔═╡ d6dc1c65-cb14-4e84-9f17-b1d7913ab8e2
-using Flux: onehotbatch, onecold
+# ╔═╡ 15d48a70-0647-11ef-1a68-fb486549b55d
+md"""
+# Trabajo Práctico N°2: Reconocimiento de dígitos escritos a mano
+"""
 
-# ╔═╡ 4c2dbadf-0935-47d1-b158-801491d42f4e
+# ╔═╡ 21cf705c-7852-498c-8ac4-a3cbc6e48d9d
+md"""
+Utilizaremos el conjunto de datos `MNIST` del paquete `MLDatasets` que contiene 60000 imágenes de dígitos del 0 al 9. Cada imagen está representada por 28 píxeles en cada dimensión. Nuestro objetivo será construir un modelo que dada una imagen que contenga escrito algún dígito del 0 al 9 me responda de cual se trata.
+"""
+
+# ╔═╡ a4a663fd-0222-4799-b140-53adbf7f74ec
 begin 
-	using MLDatasets:CIFAR10
-	using JLD2, CUDA, cuDNN
+	gpu_available = CUDA.has_cuda()
+	function to_device(x)
+	    if gpu_available
+	        return x |> gpu
+	    else
+	        return x
+	    end
+	end
 end
 
-# ╔═╡ 2926a954-eaf5-46d6-ab0d-92536ebf964e
-using Base.Iterators: partition
-
-# ╔═╡ 557f4bac-08a3-11ef-1554-cb39cdab823d
+# ╔═╡ 818b52b9-bb51-448e-8d21-536de39b8c83
 md"""
-# Redes Convolucionales
+### Preparando los datos
 """
 
-# ╔═╡ f1bd8e99-d61f-4387-83c5-b37b213bd315
+# ╔═╡ 3bd8022f-0331-4b8f-8103-08f8141185ac
 md"""
-Utilizar solo capas densas tiene algunas desventajas, especialmente en el reconocimiento de imagenes. Estas desventajas incluyen:
-- Gran cantidad de parámetros. Para una imagen con 500 × 500 × 3 píxeles y una capa de salida de solo 1000 neuronas, la capa densa contendría 750 millones de parámetros. Esto es demasiado para optimizar.
-- *Sin información estructural*. Las capas densas asignan un peso a cada píxel y luego agregan los valores ponderados. Esto significa que se combinará la información de los píxeles superior izquierdo e inferior derecho de la imagen. Dado que una combinación de estos dos píxeles no debería contener información significativa, se realiza un cálculo redundante.
-
-Para procesar este tipo de datos, se utilizan redes neuronales convolucionales.
-
-Se construye una red neuronal convolucional a partir de dos tipos de capas:
-
-- **Capas de convolución**: utilizadas para generar nuevas características a partir de píxeles de imagen de entrada.
-- **Capas de agrupación**: para generalizar funciones utilizando algunas reglas y de esta manera reducir su cantidad.
-"""
-
-# ╔═╡ d7548dcc-c3d1-446f-bb7e-c344b7cf4008
-md"""
-Para crear la capa de convolución, `Flux` tiene la función `Conv` con los siguientes parámetros principales:
-```julia
-Conv(filter,in=>out,activation_function)
-```
-
-- **filter** define las dimensiones de la matriz del núcleo que se aplicará a cada píxel de la matriz de entrada para crear una característica a partir de ella. Por ejemplo, el valor (3,3) define la matriz del núcleo 3x3. Así es como funciona la convolución que utiliza esta matriz del núcleo para generar las características de una imagen de tamaño 6x6:
-[link](https://en.m.wikipedia.org/wiki/File:2D_Convolution_Animation.gif)
-
-- **in** es el número de canales de imagen de entrada. Por ejemplo para las imágenes en escalas de grises tienen un solo canal. Para otras capas, el número de canales de entrada de la capa actual debe ser igual al número de canales de salida de la capa anterior.
-
-- **activation_function** es la función que se aplicará a cada característica después de la convolución y antes de enviarla a la siguiente capa de la red, igual que hicimos antes para las capas densas.
+Siguiendo las siguientes rutinas se pueden separar los datos en un conjunto de entrenamiento y otro de testeo.
 
 ```julia
-model = Chain(
-    Conv((5,5),1=>6,relu),
-    Flux.flatten,
-    Dense(4704=>15,relu),
-    Dense(15=>10,sigmoid),
-    softmax
-)
-```
-
-esta red obtendrá una imagen de un solo canal de la siguiente forma: (28,28,1). Producirá 6 matrices a partir de esta imagen aplicando diferentes núcleos de convolución de 5x5 a los datos de entrada.
-
-La salida de esta capa será la imagen de la siguiente forma: (28,28,6). En otras palabras, esta capa de convolución generará 28x28x6 = 4704 características de 784 píxeles de entrada para nuestra red.
-
-Pero si tiene más características, no significa que todas sean buenas. Tal vez necesite generalizarlos y dejar solo las "mejore". Es por eso que se crean las capas de agrupación.
-
-En `Flux`, la capa de agrupación se puede definir usando la función `MaxPool`. Recibe las dimensiones de la ventana de agrupación como argumento.
-
-Por ejemplo, 
-
-```julia
-MaxPool((2,2))
-```
-
-[ver](https://nico-curti.github.io/NumPyNet/NumPyNet/layers/maxpool_layer.html)
-
-```julia
-model = Chain(
-    Conv((5,5),1=>6,relu),
-    MaxPool((2,2)),
-    Flux.flatten,
-    Dense(1176=>15,relu),
-    Dense(15=>10,sigmoid),
-    softmax
-)
-```
-
-Entonces, `MaxPool` recibe la imagen de tamaño (28,28,6) de la capa de convolución, le aplica la ventana de 2x2 y le da salida (14,14,6). Después de esto, las características generalizadas de 14x14x6=1176 se reenvían a las capas de red a continuación.
-
-```julia
-model = Chain(
-    Conv((5,5),1 => 6, relu),
-    MaxPool((2,2)),
-    Conv((5,5),6 => 16, relu),
-    MaxPool((2,2)),
-    Flux.flatten,
-    Dense(256=>120,relu),
-    Dense(120=>84, relu),
-    Dense(84=>10, sigmoid),
-    softmax
-)
+T = Float32
+X_train, y_train = MLDatasets.MNIST(T, :train)[:]
+X_test, y_test = MLDatasets.MNIST(T, :test)[:]
 ```
 """
 
-# ╔═╡ 2c8b009b-bba3-4ce4-b667-b2467516ab53
+# ╔═╡ cbc7cf07-834a-4ee8-9103-9edf0c63f50a
 md"""
-## Comencemos...
+Para graficar algúno de los digitos puede usar el comando `Gray` del paquete `Images`
 """
 
-# ╔═╡ 19b425e1-d0e7-4659-a905-815148fcbda1
-md"""
-Usaremos el dataset CIFAR10. Este es un conjunto de datos de 50.000 imágenes de entrenamiento divididas en 10 clases.
-
-![](https://pytorch.org/tutorials/_images/cifar10.png)
-
-
-"""
-
-# ╔═╡ a1b585f3-309e-4536-b30a-a78ce316a453
-md"""
-!!! warning "Antes de comenzar"
-	Debemos instalar el paquete `MLDatasets` y desde consola correr
-	```julia
-	using MLDatasets: CIFAR10
-	```
-	para descargar el dataset.
-"""
-
-# ╔═╡ c31082d0-4ae7-45d6-beb2-5a53618d3775
-Flux.GPU_BACKEND
-
-# ╔═╡ 403437ea-a47c-4825-a28a-3e182f0d1820
-train_x, train_y = CIFAR10(split=:train)[:]
-
-# ╔═╡ 35ef3aa3-bdad-472b-a503-06828a53ba03
-begin 
-	print("estos son los unicos valores posibles: ",unique(train_y))
-	labels = onehotbatch(train_y, 0:9)
-	classes = 0:9
-end
-
-# ╔═╡ 48563636-b4d0-44de-bb47-e9082a0547d9
-# tener en cuenta que el formato de una img en train_x es H W fondo, sin embargo colorview para RGB toma im con formato fondo W H (al reves ?)
-image(x) = colorview(RGB, permutedims(x, (3, 2, 1)))
-
-# ╔═╡ ea73bc7c-a83d-445d-bfbb-14d2caa57560
-plot(image(train_x[:,:,:,6]))
-
-# ╔═╡ 57f0d7a0-1ec6-4cee-98df-8e059eb2f856
-md"""
-!!! note "Ejercicio"
-	Implementar la función de pérdida usando la `crossentropy` y guardar en una variable el optimizador usando `Momentum` ([documentación](https://fluxml.ai/Flux.jl/stable/training/optimisers/#Flux.Optimise.Momentum)).
-"""
-
-# ╔═╡ e745afc5-7eee-44c3-a4ba-2ac549d1f648
-md"""
-!!! note "Ejercicio"
-	Implementar una función `accuracy` para calcular la presición del modelo.
-"""
-
-# ╔═╡ 7dab59a1-e1f4-42e9-8552-a2ceba056ff6
-accuracy(model,x,y) = mean( 
-						onecold(model(x),classes) .== onecold(y,classes)
-						)
-
-# ╔═╡ 79c0de70-2ade-499c-891e-4b50b0cb657e
-md"""
-#### Otra forma de generar los batches
-"""
-
-# ╔═╡ 90f23428-9fd4-48fc-8a53-d3934fe6e0f0
-begin 
-	train_loader = Flux.DataLoader((train_x[:,:,:,1:49000], labels[:,1:49000]), batchsize=32, shuffle=true)
-	val_loader = Flux.DataLoader((train_x[:,:,:,49001:50000], labels[:,49001:50000]), batchsize=32, shuffle=true)
-end
-
-# ╔═╡ 8b1d2dda-bd61-4883-bbf8-1ce73b0d07b3
-# begin
-# 	train = ([(train_x[:,:,:,i], labels[:,i]) for i in partition(1:20000, 200)])
-# 	valset = 49001:50000
-# 	valX = train_x[:,:,:,valset] 
-# 	valY = labels[:, valset]
-# end
-
-# ╔═╡ 4c3c12da-f6aa-4459-91cf-a6ce0328f6c4
-md"""
-!!! note "Ejercicio"
-	Generar una red con las siguientes caracteristicas: Dos capaz convolucionales de tamaño 5x5 acompañadas de dos ventanas de 2x2. Las capaz deben tener salida 16 y 8 respectivamente, y la función de activación `relu`. Las capas densas deben ser tres con funciones de activación la identidad. Recordar que al final debo aplicar la función `softmax`.  
-"""
-
-# ╔═╡ f3965e6f-d460-4465-8b10-bc845d607428
-begin 
-# sabemos que la entrada van a ser img de 32x32 con 3 en la ultima parte corresp al RGB -> size_out = 5x5 sin conciderar el fondo 
-model = Chain(
-	Conv((5,5),3 => 32),
-	BatchNorm(32,relu),
-    MaxPool((2,2)),
-    Conv((5,5),32 => 64),
-	BatchNorm(64,relu),
-    MaxPool((2,2)),
-	Conv((3,3),64 => 128),
-	BatchNorm(128,relu),
-    MaxPool((2,2)),
-    Flux.flatten,
-    Dense(128=>200),
-	Dropout(0.4),
-	BatchNorm(200,relu),
-    Dense(200=>84),
-	Dropout(0.4),
-	BatchNorm(84,relu),
-    Dense(84=>10),
-    softmax
-) |> gpu
-end
-
-# ╔═╡ 3a675776-5610-4535-b0bf-300c70ff2fec
-md"""
-!!! note "Ejercicio"
-	Realizar el entrenamiento usando 10 epochs. En cada iteración se debe mostrar el valor de la presición.
-"""
-
-# ╔═╡ ea73ef21-a448-4e37-9495-103946840516
+# ╔═╡ 2c554f3d-ccdd-4d57-a7e0-52d9be974294
 begin
-	opt = Flux.Optimise.Adam()
-	L(m,x,y) = Flux.Losses.crossentropy(m(x),y)
-	max_epochs = 10
+	X_prueba,y_prueba = MLDatasets.MNIST(Float32, :train)[:]
+	X_prueba = permutedims(X_prueba, (2,1,3)) 
+	Gray.(X_prueba[:,:,1])
+end
+
+# ╔═╡ be5c6489-b410-473b-a875-7e25a0313175
+md"""
+!!! note "Ejercicio 1"
+	Graficar las primeras 10 imagenes del dígito 0 del conjunto de entrenamiento. Recuerde que el vector `y_train` contiene los digitos para cada matriz de entrenamiento. Para realizar esto puede ser útil el comando `findall`.  
+"""
+
+# ╔═╡ 6dc9f1b8-41d9-47ac-9b64-59d4468b7c87
+begin
+	zero_i = findall(x->x==9,y_prueba)
+	zero_10 = zero_i[1:10]
+		
+	num_images = 10
+    num_cols = min(4, num_images)  
+    num_rows = ceil(Int, num_images / num_cols)  
+
+	ps = [heatmap(Gray.(X_prueba[:,:,i])) for i in zero_10]
+	plot(
+		ps..., layout=(num_rows, num_cols)
+	)
+end
+
+# ╔═╡ 7fb568c1-e4bd-41da-8924-30b13d5011b7
+md"""
+!!! note "Ejercicio 2"
+	Implementar una función `load_data` que tome como argumento el dataset y retorne los conjuntos de entrenamiento y testeo. La función debe tener la opción de aplicar onehot al conjunto `y` teniendo en cuenta que las clases son los digitos del 0 al 9. 
+
+	*Sugerencia:* Para esto es util la función `onehotbatch` de Flux.
+"""
+
+# ╔═╡ 1aa88a80-92eb-4a5c-88d0-88f4207cd0d0
+function load_data(dataset;train_size=0.8,onehot=true,seed=1234)
+	Random.seed!(seed)
+	X,y = dataset  
+	Instances = [X[:,:,findall(x->x==i,y)] for i in 0:9]
+	Instances = [I[:,:,shuffle(1:size(I,3))] for I in Instances]
+	
+	train_ind = [Int(floor(size(I,3)*train_size)) for I in Instances]
+	
+	Xs_train = [I[:,:,1:train_ind[i]] for (i,I) in enumerate(Instances)]
+	ys_train = [fill(i-1,cant) for (i,cant) in enumerate(train_ind)]
+	Xs_val = [I[:,:,train_ind[i]+1:end] for (i,I) in enumerate(Instances)]
+	ys_val = [fill(i-1,Int(size(I,3))-train_ind[i]) for (i,I) in enumerate(Instances)]
+	#println(Int(size(Instances[],3))-train_ind[1])
+	X_train,y_train = cat(Xs_train...,dims=3),cat(ys_train...,dims=1)  # concatenamos
+	X_val,y_val = cat(Xs_val...,dims=3),cat(ys_val...,dims=1)
+	
+	trainShuffle = shuffle(1:size(X_train,3))
+	valShuffle = shuffle(1:size(X_val,3))
+	
+	y_train = y_train[trainShuffle]
+	y_val = y_val[valShuffle]
+	
+	if onehot 
+		y_train = Flux.onehotbatch(y_train,0:9)
+		y_val = Flux.onehotbatch(y_val,0:9)
+	end
+	
+	return X_train[:,:,trainShuffle],y_train , X_val[:,:,valShuffle], y_val
+end
+
+# ╔═╡ f2447db1-4234-4e2f-9791-7803513574b3
+begin 
+	dataset = [X_prueba,y_prueba]
+	X_train,y_train,X_val,y_val = load_data(dataset)
+end
+
+# ╔═╡ 4fa39e63-cb80-4125-ad7e-80ef1f7cba4f
+md"""
+### Creando la red
+"""
+
+# ╔═╡ e1d56012-ddd8-4efe-b6f7-72bd88c7dd1c
+md"""
+El primer ojetivo será crear una red multicapa sin convoluciones y realizar un entrenamiento para distintos optimizadores y así poder compararlos.
+
+Recordemos que el conjunto de datos de entrenamiento consta de imágenes de 28x28 píxeles. La imagen de entrada, que es una matriz de 28x28 donde cada elemento de la matriz representa la intensidad de color de cada píxel.
+
+- La red deberá estar compuesta por dos capas. La primera con función de activación `relu` y la segunda con función de activación `sigmoide`.
+- La salida debe contar con 10 elementos.
+- Finalmente debe incluir la función softmax para convertir los valores acumulados en las 10 neuronas de la capa de salida para mostrar las probablidades.
+"""
+
+# ╔═╡ 649681ae-ca54-4c01-9e9e-d1ca3eb192fe
+md"""
+Para que no haya diferencias en lo que cada uno implemente, fijaremos la semilla:
+"""
+
+# ╔═╡ d1337cc6-ac71-4234-88db-fe01f4686807
+Random.seed!(1234)
+
+# ╔═╡ 4b4b1742-d7e7-4538-b420-9ebd63e8b463
+md"""
+!!! note "Ejercicio 3"
+	Construir una red de prueba `model_prueba` con las caracteristicas descriptas anteriormente. Recuerde que la entrada a la primer capa debe ser un vector que depende del tamaño de la imagen.
+"""
+
+# ╔═╡ 3545dc45-9902-4e51-9b4a-772c7f667e0e
+model_1 = to_device(Chain(
+	Dense(28*28=>800,relu),
+	Dense(800=>120,sigmoid),
+	Dense(120=>10),
+	softmax
+))
+
+# ╔═╡ d88b258c-cfcd-416b-b15a-b3f864b04030
+md"""
+Si quiseramos saber cual es la predicción del modelo sin entrenar por ejemplo para la primera matriz de datos podemos realizar la siguiente operación:
+
+```julia
+model(Flux.unsqueeze(X_train[:,:,1],dims=3))
+```
+Usamos la función `unsqueeze` para convertir la imagen de la forma (28,28) a la forma de (28,28,1). La función del modelo en este caso recibe una única imagen de tamaño 28x28.
+"""
+
+# ╔═╡ 03d4b7de-cf8d-4428-87d9-f5be59e6aaf3
+begin
+	#model_1(Flux.unsqueeze(X_train[:,:,1],dims=3))
+	img = X_train[:,:,1]
+	#x = Flux.unsqueeze(img,dims=3)
+	#x[:,:,1]
+	#z = Flux.unsqueeze(Flux.flatten(img),dims=3)
+	s = to_device(reshape(img,28*28,1)) 
+	model_1(s)
+end
+
+# ╔═╡ eaeeb678-e690-4de1-8a65-84bff36f24ae
+md"""
+!!! note "Ejercicio 4" 
+	¿Que dígito contiene `y_train[:,1]` y cual predice el modelo sin entrenar? 
+
+	*Sugerencia:* Puede ser útil utilizar la función `onecold`.
+"""
+
+# ╔═╡ 33dca609-3238-430f-8dae-0aa6199b01e7
+begin 
+	valor = Flux.onecold(y_train[:,1],0:9)
+	prim = to_device(reshape(X_train[:,:,1],28*28,1))
+	pred = model_1(prim)
+	v_pred = Flux.onecold(pred,0:9)
+	print("el modelo predice $v_pred y el valor real era $valor")
+end
+
+# ╔═╡ 3fc9aacf-7475-4f67-b3d1-090f1524271b
+md"""
+## Entrenando la red
+"""
+
+# ╔═╡ 3bdf1d99-df8c-4b3c-b12b-aeefabad2e4f
+md"""
+### Entrenamiento 1
+"""
+
+# ╔═╡ 5ec00665-3fe3-4a82-a5f2-45fe86fa0d15
+md"""
+Para lo que sigue utilizaremos las funciones `DataLoader` y `params` de Flux.
+"""
+
+# ╔═╡ 56fc23a1-1f09-4439-875f-3f15b9752fe5
+md"""
+!!! note "Ejercicio 5"
+	Crear una variable `data1` que tenga particionado nuestro conjunto de entrenamiento en tuplas de tamaño 100.
+"""
+
+# ╔═╡ 7853b8f8-5302-4914-a7c8-ef160669a6fe
+begin 
+	data1 = Flux.DataLoader((X_train,y_train),batchsize=100,shuffle=true)
+	val1 = Flux.DataLoader((X_val,y_val),batchsize=32,shuffle=true)
+end
+
+# ╔═╡ 3f90f311-2892-4a51-a47c-e9b3bc02573d
+md"""
+!!! note "Ejercicio 6"
+	Implementar una función `accuracy` que calcule la tasa de precisión del modelo. 
+"""
+
+# ╔═╡ 266a746d-0ec4-458c-ae3b-a861169e5200
+function accuracy(m,x,y) 
+	X = reshape(x[:,:,1:end],28*28,size(x,3))
+	mean( Flux.onecold(m(X),0:9) .== Flux.onecold(y,0:9))
+end
+
+# ╔═╡ a8f7204f-eb72-4dba-8e99-783ec67bd30f
+md"""
+!!! note "Ejercicio 7"
+	Implementar una función `train_model!` que realice el entrenamiento. Esta función debe tomar como argumentos el modelo, la función de pérdida, el conjunto de datos particionado, el tipo de optimizador y la cantidad de "epochs" para realizar dicho entrenamiento. A su vez en cada iteración se debe imprimir y guardar:
+	
+	1. La precisión del modelo usando el conjunto de testeo en cada *epoch*.
+	2. El resultado de la función de pérdida en cada *epoch*.
+"""
+
+# ╔═╡ 35150b4a-3f1e-4af2-bdd9-2640894a419c
+function train_model!(model,loss::Function,train_loader,val_loader,opt;epochs=2)
 	p = Flux.params(model)
-	acc_test = zeros(max_epochs)
-	for i in 1:max_epochs
+	acc_test = zeros(epochs)
+	for i in 1:epochs
 		for (X_train, y_train) in train_loader
-			X_train, y_train = gpu(X_train), gpu(y_train)
-			gs = gradient(() -> L(model,X_train, y_train), p)
+			X_train, y_train = to_device(X_train), to_device(y_train)
+			gs = gradient(() -> loss(model,X_train, y_train), p)
 		    Flux.Optimise.update!(opt, p, gs)
 		end
-		val_accuracy=mean([accuracy(model,X_val|>gpu, y_val|>gpu) for (X_val, y_val) in val_loader])
+		val_accuracy=mean([accuracy(model,to_device(X_val),to_device(y_val)) for (X_val, y_val) in val_loader])
     	println("Epoch: $i, Validation Accuracy: $val_accuracy")
 		acc_test[i] = val_accuracy
 	end
 	plot(acc_test, xlabel="Iteración", ylabel="Test accuracy", label="", ylim=(-0.01,1.01))
+	
 end
 
-# ╔═╡ 93482169-48c5-4adf-9122-5f80e94bbe31
+# ╔═╡ 2fff20de-4831-4d34-95de-27f3b4d8ae51
 md"""
-#### Testeando el modelo
+!!! note "Ejercicio 8"
+	Realizar 3 entrenamientos independientes usando los siguientes optimizadores: 
+	1. Descenso por el gradiente con paso 0.1, 
+	2. ADAM, 
+	3. Momentum.
+
+	Tener en cuenta que será necesario implementar una función de pérdida adecuada para el problema e inicializar el optimizador correspondiente con Flux.
 """
 
-# ╔═╡ 98f29c6b-d244-47d3-a776-6a18306aaef1
+# ╔═╡ 9098ed3e-62bb-4fee-923c-a4969d489be3
+begin 
+	opt = Flux.Optimise.Descent()
+	
+	function L(m,x,y)
+		X = reshape(x[:,:,1:end],28*28,size(x,3))
+		Flux.Losses.crossentropy(m(X),y)
+	end
+	train_model!(model_1,L,data1,val1,opt)
+end
+
+# ╔═╡ 133ebbd8-e266-46b1-8bd9-a46df3ab2dbe
+begin 
+	
+end
+
+# ╔═╡ ba9a94e8-40ef-42ad-a941-dce9ad1d2435
 md"""
-!!! note "Ejercicio"
-	Generar un indice al azar entre 1 y 10000. Luego imprimir el vector de probabilidades de evaluar el modelo en la matriz de testeo que corresponde a ese indice (Puede ser util el comando `unsqueeze` de Flux). Guardar el valor que devuelve el conjunto de testeo `y` para luego imprimir la etiqueta correspondiente.
+!!! note "Ejercicio 9"
+	Relizar un grafico que muestre el avance de la precisión del modelo y uno que muestre el resultado de la función de pérdida comparando los distintos optimizadores.
 """
 
-# ╔═╡ 20c9fae6-544e-4ff1-aed0-3339f12450de
+# ╔═╡ 8210e8d7-5e9e-4163-bd5a-d3bbf7f03ab0
+#completar
 
+# ╔═╡ badeffab-386a-4a3b-8c5d-8588ec26df80
+md"""
+!!! note "Ejercicio 10"
+	Realizar un único grafico donde se vea la ```loss_{train}``` y ```loss_{test}``` en función de la cantidad de iteraciones para cada uno de los métodos de descenso.
+"""
+
+# ╔═╡ 8e1991dd-7ee8-4cf8-8370-bf4cb815a0d5
+#completar
+
+# ╔═╡ 4a3dc8cd-9d21-4a8a-8777-cb043e3ce22f
+md"""
+!!! terminology "" 
+	¿Qué conclusiones del analisis previo puede sacar?¿Que optimizador fue mejor?
+"""
+
+# ╔═╡ 2c284bb5-57be-48f4-a970-3f0600332836
+#responder
+
+# ╔═╡ 6f1727bb-9e06-44a3-aa81-9b31864baf3b
+md"""
+---
+"""
+
+# ╔═╡ dcf7d941-18ff-4c37-bb65-4c73a9a47df6
+md"""
+### Entrenamiento 2: Convolucionales
+"""
+
+# ╔═╡ 6b083ebb-f9f3-490b-9bf3-3f11318c54aa
+md"""
+Ahora construiremos una nueva red usando convoluciones. Dicha red deberá contener dos capas de convolución de 5x5. Recordar que ademas de las capas de convolución se debe reducir el tamañno utilizando un pool (por ejemplo, de 2x2). 
+"""
+
+# ╔═╡ 0ce10511-6c28-4e4f-9cb1-35577c1e2cfe
+md"""
+!!! note "Ejercicio 11"
+	Recordando lo visto en clase sobre como debe ser el formato de entrada de la matriz de cada imagen a la capa convolucional contruir un nuevo conjunto de entrenamiento y testeo `X_train_2` y `X_test_2`. 
+
+	*Sigerencia:* puede ser útil la función `reshape`.
+"""
+
+# ╔═╡ 0ffc22b3-9dcd-496a-a694-1ef3675396f4
+model_2 = to_device(Chain(
+	Conv((5,5),1 => 8,relu),
+    MaxPool((2,2)),
+    Conv((5,5),8 => 16,relu),
+    MaxPool((2,2)),
+    Flux.flatten,
+    Dense(4*4*16=>150,relu),
+    Dense(150=>20,sigmoid),
+    Dense(20=>10),
+    softmax
+) )
+
+# ╔═╡ 88ac49df-5c4d-4878-8b0e-559d4d48d6f8
+md"""
+!!! note "Ejercicio 12"
+	Crear una variable `data2` que tenga particionado nuestro nuevo conjunto de entrenamiento en tuplas de tamaño 100.
+"""
+
+# ╔═╡ c344393c-76ca-46ed-bd72-bf69719eafb0
+#completar mismo dataset para el modelo anterior
+
+# ╔═╡ 2f8a416e-6692-415b-aa5c-69ccedae6244
+md"""
+!!! note "Ejericicio 13"
+	Repetir el ejercicio 8 y realizar un gráfico comparando la Loss de la red neuronal multicapa y la red neuronal convolucional para cada método de descenso.
+"""
+
+# ╔═╡ d20c2f60-6536-4a27-a22f-844f6e9ecd46
+#completar
+
+# ╔═╡ e04b70d3-1f3f-484c-a906-6ef27644b849
+md"""
+!!! terminology "" 
+	¿Qué conclusiones puede sacar?¿El entrenamiento 2 arrojo mejores resultados que el entrenamiento 1?
+"""
+
+# ╔═╡ 0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
+#completar
+
+# ╔═╡ 442d3c42-44e3-4525-a215-8526c61083db
+md"""
+---
+"""
+
+# ╔═╡ 7bf1a8fa-7de3-4499-920d-3fbf8f7a79c4
+md"""
+!!! note "Ejercicio bonus (no obligatorio)"
+	Implementar una función que tomé como argumento una imagen de las alojadas en el archivo .rar y retorne el dígito que contenga dicha imagen.
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -263,9 +399,10 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
-JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
 
@@ -273,9 +410,9 @@ cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
 CUDA = "~5.4.2"
 Flux = "~0.14.15"
 Images = "~0.26.1"
-JLD2 = "~0.4.48"
 MLDatasets = "~0.7.14"
 Plots = "~1.40.4"
+PlutoUI = "~0.7.59"
 cuDNN = "~1.3.2"
 """
 
@@ -285,7 +422,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "d1cce4b82fc3e48d90ec9c298cdab67e92a897dd"
+project_hash = "3bbdb82f2f4ab45a5df109013ad2b0610abb7919"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -297,6 +434,12 @@ weakdeps = ["ChainRulesCore", "Test"]
     [deps.AbstractFFTs.extensions]
     AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
     AbstractFFTsTestExt = "Test"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.2"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -1040,6 +1183,24 @@ git-tree-sha1 = "ca0f6bf568b4bfc807e7537f081c81e35ceca114"
 uuid = "e33a78d0-f292-5ffc-b300-72abe9b543c8"
 version = "2.10.0+0"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.4"
+
 [[deps.IRTools]]
 deps = ["InteractiveUtils", "MacroTools"]
 git-tree-sha1 = "950c3717af761bc3ff906c2e8e52bd83390b6ec2"
@@ -1527,6 +1688,11 @@ git-tree-sha1 = "1d2dd9b186742b0f317f2530ddcbf00eebb18e96"
 uuid = "23992714-dd62-5051-b70f-ba57cb901cac"
 version = "0.10.7"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
 git-tree-sha1 = "80b2833b56d466b3858d565adcd16a4a05f2089b"
@@ -1895,6 +2061,12 @@ version = "1.40.4"
     IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "ab55ee1510ad2af0ff674dbcced5e94921f867a9"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.59"
 
 [[deps.PolyesterWeave]]
 deps = ["BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "Static", "ThreadingUtilities"]
@@ -2374,6 +2546,11 @@ version = "0.4.80"
     OnlineStatsBase = "925886fa-5bf2-5e8e-b522-a9147a512338"
     Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
 
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
+
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
@@ -2806,33 +2983,59 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─557f4bac-08a3-11ef-1554-cb39cdab823d
-# ╟─f1bd8e99-d61f-4387-83c5-b37b213bd315
-# ╟─d7548dcc-c3d1-446f-bb7e-c344b7cf4008
-# ╠═ea924f65-d098-4654-bf23-0baf91a72f64
-# ╠═d6dc1c65-cb14-4e84-9f17-b1d7913ab8e2
-# ╟─2c8b009b-bba3-4ce4-b667-b2467516ab53
-# ╟─19b425e1-d0e7-4659-a905-815148fcbda1
-# ╟─a1b585f3-309e-4536-b30a-a78ce316a453
-# ╠═4c2dbadf-0935-47d1-b158-801491d42f4e
-# ╠═c31082d0-4ae7-45d6-beb2-5a53618d3775
-# ╠═403437ea-a47c-4825-a28a-3e182f0d1820
-# ╠═35ef3aa3-bdad-472b-a503-06828a53ba03
-# ╠═48563636-b4d0-44de-bb47-e9082a0547d9
-# ╠═ea73bc7c-a83d-445d-bfbb-14d2caa57560
-# ╟─57f0d7a0-1ec6-4cee-98df-8e059eb2f856
-# ╟─e745afc5-7eee-44c3-a4ba-2ac549d1f648
-# ╠═7dab59a1-e1f4-42e9-8552-a2ceba056ff6
-# ╟─79c0de70-2ade-499c-891e-4b50b0cb657e
-# ╠═2926a954-eaf5-46d6-ab0d-92536ebf964e
-# ╠═90f23428-9fd4-48fc-8a53-d3934fe6e0f0
-# ╠═8b1d2dda-bd61-4883-bbf8-1ce73b0d07b3
-# ╟─4c3c12da-f6aa-4459-91cf-a6ce0328f6c4
-# ╠═f3965e6f-d460-4465-8b10-bc845d607428
-# ╟─3a675776-5610-4535-b0bf-300c70ff2fec
-# ╠═ea73ef21-a448-4e37-9495-103946840516
-# ╟─93482169-48c5-4adf-9122-5f80e94bbe31
-# ╟─98f29c6b-d244-47d3-a776-6a18306aaef1
-# ╠═20c9fae6-544e-4ff1-aed0-3339f12450de
+# ╟─15d48a70-0647-11ef-1a68-fb486549b55d
+# ╟─21cf705c-7852-498c-8ac4-a3cbc6e48d9d
+# ╠═f92178d8-5c5b-42e8-9d98-672cb500a2f1
+# ╠═a4a663fd-0222-4799-b140-53adbf7f74ec
+# ╟─818b52b9-bb51-448e-8d21-536de39b8c83
+# ╟─3bd8022f-0331-4b8f-8103-08f8141185ac
+# ╟─cbc7cf07-834a-4ee8-9103-9edf0c63f50a
+# ╠═2c554f3d-ccdd-4d57-a7e0-52d9be974294
+# ╟─be5c6489-b410-473b-a875-7e25a0313175
+# ╠═6dc9f1b8-41d9-47ac-9b64-59d4468b7c87
+# ╟─7fb568c1-e4bd-41da-8924-30b13d5011b7
+# ╠═1aa88a80-92eb-4a5c-88d0-88f4207cd0d0
+# ╠═f2447db1-4234-4e2f-9791-7803513574b3
+# ╟─4fa39e63-cb80-4125-ad7e-80ef1f7cba4f
+# ╟─e1d56012-ddd8-4efe-b6f7-72bd88c7dd1c
+# ╟─649681ae-ca54-4c01-9e9e-d1ca3eb192fe
+# ╠═d1337cc6-ac71-4234-88db-fe01f4686807
+# ╟─4b4b1742-d7e7-4538-b420-9ebd63e8b463
+# ╠═3545dc45-9902-4e51-9b4a-772c7f667e0e
+# ╟─d88b258c-cfcd-416b-b15a-b3f864b04030
+# ╠═03d4b7de-cf8d-4428-87d9-f5be59e6aaf3
+# ╟─eaeeb678-e690-4de1-8a65-84bff36f24ae
+# ╠═33dca609-3238-430f-8dae-0aa6199b01e7
+# ╟─3fc9aacf-7475-4f67-b3d1-090f1524271b
+# ╟─3bdf1d99-df8c-4b3c-b12b-aeefabad2e4f
+# ╟─5ec00665-3fe3-4a82-a5f2-45fe86fa0d15
+# ╟─56fc23a1-1f09-4439-875f-3f15b9752fe5
+# ╠═7853b8f8-5302-4914-a7c8-ef160669a6fe
+# ╟─3f90f311-2892-4a51-a47c-e9b3bc02573d
+# ╠═266a746d-0ec4-458c-ae3b-a861169e5200
+# ╟─a8f7204f-eb72-4dba-8e99-783ec67bd30f
+# ╠═35150b4a-3f1e-4af2-bdd9-2640894a419c
+# ╟─2fff20de-4831-4d34-95de-27f3b4d8ae51
+# ╠═9098ed3e-62bb-4fee-923c-a4969d489be3
+# ╠═133ebbd8-e266-46b1-8bd9-a46df3ab2dbe
+# ╟─ba9a94e8-40ef-42ad-a941-dce9ad1d2435
+# ╠═8210e8d7-5e9e-4163-bd5a-d3bbf7f03ab0
+# ╟─badeffab-386a-4a3b-8c5d-8588ec26df80
+# ╠═8e1991dd-7ee8-4cf8-8370-bf4cb815a0d5
+# ╟─4a3dc8cd-9d21-4a8a-8777-cb043e3ce22f
+# ╠═2c284bb5-57be-48f4-a970-3f0600332836
+# ╟─6f1727bb-9e06-44a3-aa81-9b31864baf3b
+# ╟─dcf7d941-18ff-4c37-bb65-4c73a9a47df6
+# ╟─6b083ebb-f9f3-490b-9bf3-3f11318c54aa
+# ╟─0ce10511-6c28-4e4f-9cb1-35577c1e2cfe
+# ╠═0ffc22b3-9dcd-496a-a694-1ef3675396f4
+# ╟─88ac49df-5c4d-4878-8b0e-559d4d48d6f8
+# ╠═c344393c-76ca-46ed-bd72-bf69719eafb0
+# ╟─2f8a416e-6692-415b-aa5c-69ccedae6244
+# ╠═d20c2f60-6536-4a27-a22f-844f6e9ecd46
+# ╟─e04b70d3-1f3f-484c-a906-6ef27644b849
+# ╠═0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
+# ╟─442d3c42-44e3-4525-a215-8526c61083db
+# ╟─7bf1a8fa-7de3-4499-920d-3fbf8f7a79c4
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.41
 
 using Markdown
 using InteractiveUtils
@@ -466,9 +466,6 @@ print("GRADIENTE ESTOCÁSTICO \n \n")
 print("La accuracy en train:",accuracy(m_schocastic_gardient_descent, X_train, y_train),"\n")
 print("La accuracy en test:",accuracy(m_schocastic_gardient_descent, X_test, y_test),"\n")
 end
-
-# ╔═╡ 17bc04bf-d5b4-463b-b190-9de3374edbf8
-
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1743,6 +1740,5 @@ version = "1.4.1+1"
 # ╠═6478b8bc-1e91-4b37-84bf-f5ba8ca31a00
 # ╠═24d52c76-0e55-4b92-8351-2caa1bcbfee8
 # ╠═a15192b7-77ef-4fd4-b548-776f50e19fec
-# ╠═17bc04bf-d5b4-463b-b190-9de3374edbf8
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
