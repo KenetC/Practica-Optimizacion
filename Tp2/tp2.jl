@@ -5,7 +5,10 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ f92178d8-5c5b-42e8-9d98-672cb500a2f1
-using MLDatasets, Images, Flux, Random, Statistics, Plots, CUDA, cuDNN, PlutoUI
+begin 
+	using MLDatasets, Images, Flux, Random, Statistics, Plots, PlutoUI, CUDA, cuDNN
+	include("utils.jl")
+end
 
 # ╔═╡ 15d48a70-0647-11ef-1a68-fb486549b55d
 md"""
@@ -17,32 +20,9 @@ md"""
 Utilizaremos el conjunto de datos `MNIST` del paquete `MLDatasets` que contiene 60000 imágenes de dígitos del 0 al 9. Cada imagen está representada por 28 píxeles en cada dimensión. Nuestro objetivo será construir un modelo que dada una imagen que contenga escrito algún dígito del 0 al 9 me responda de cual se trata.
 """
 
-# ╔═╡ a4a663fd-0222-4799-b140-53adbf7f74ec
-begin 
-	gpu_available = CUDA.has_cuda()
-	function to_device(x)
-	    if gpu_available
-	        return x |> gpu
-	    else
-	        return x
-	    end
-	end
-end
-
 # ╔═╡ 818b52b9-bb51-448e-8d21-536de39b8c83
 md"""
 ### Preparando los datos
-"""
-
-# ╔═╡ 3bd8022f-0331-4b8f-8103-08f8141185ac
-md"""
-Siguiendo las siguientes rutinas se pueden separar los datos en un conjunto de entrenamiento y otro de testeo.
-
-```julia
-T = Float32
-X_train, y_train = MLDatasets.MNIST(T, :train)[:]
-X_test, y_test = MLDatasets.MNIST(T, :test)[:]
-```
 """
 
 # ╔═╡ cbc7cf07-834a-4ee8-9103-9edf0c63f50a
@@ -54,7 +34,6 @@ Para graficar algúno de los digitos puede usar el comando `Gray` del paquete `I
 begin
 	X_prueba,y_prueba = MLDatasets.MNIST(Float32, :train)[:]
 	X_prueba = permutedims(X_prueba, (2,1,3)) 
-	Gray.(X_prueba[:,:,1])
 end
 
 # ╔═╡ be5c6489-b410-473b-a875-7e25a0313175
@@ -64,19 +43,7 @@ md"""
 """
 
 # ╔═╡ 6dc9f1b8-41d9-47ac-9b64-59d4468b7c87
-begin
-	zero_i = findall(x->x==9,y_prueba)
-	zero_10 = zero_i[1:10]
-		
-	num_images = 10
-    num_cols = min(4, num_images)  
-    num_rows = ceil(Int, num_images / num_cols)  
-
-	ps = [heatmap(Gray.(X_prueba[:,:,i])) for i in zero_10]
-	plot(
-		ps..., layout=(num_rows, num_cols)
-	)
-end
+mostrar10(X_prueba,y_prueba,0)
 
 # ╔═╡ 7fb568c1-e4bd-41da-8924-30b13d5011b7
 md"""
@@ -85,37 +52,6 @@ md"""
 
 	*Sugerencia:* Para esto es util la función `onehotbatch` de Flux.
 """
-
-# ╔═╡ 1aa88a80-92eb-4a5c-88d0-88f4207cd0d0
-function load_data(dataset;train_size=0.8,onehot=true,seed=1234)
-	Random.seed!(seed)
-	X,y = dataset  
-	Instances = [X[:,:,findall(x->x==i,y)] for i in 0:9]
-	Instances = [I[:,:,shuffle(1:size(I,3))] for I in Instances]
-	
-	train_ind = [Int(floor(size(I,3)*train_size)) for I in Instances]
-	
-	Xs_train = [I[:,:,1:train_ind[i]] for (i,I) in enumerate(Instances)]
-	ys_train = [fill(i-1,cant) for (i,cant) in enumerate(train_ind)]
-	Xs_val = [I[:,:,train_ind[i]+1:end] for (i,I) in enumerate(Instances)]
-	ys_val = [fill(i-1,Int(size(I,3))-train_ind[i]) for (i,I) in enumerate(Instances)]
-	#println(Int(size(Instances[],3))-train_ind[1])
-	X_train,y_train = cat(Xs_train...,dims=3),cat(ys_train...,dims=1)  # concatenamos
-	X_val,y_val = cat(Xs_val...,dims=3),cat(ys_val...,dims=1)
-	
-	trainShuffle = shuffle(1:size(X_train,3))
-	valShuffle = shuffle(1:size(X_val,3))
-	
-	y_train = y_train[trainShuffle]
-	y_val = y_val[valShuffle]
-	
-	if onehot 
-		y_train = Flux.onehotbatch(y_train,0:9)
-		y_val = Flux.onehotbatch(y_val,0:9)
-	end
-	
-	return X_train[:,:,trainShuffle],y_train , X_val[:,:,valShuffle], y_val
-end
 
 # ╔═╡ f2447db1-4234-4e2f-9791-7803513574b3
 begin 
@@ -154,32 +90,37 @@ md"""
 """
 
 # ╔═╡ 3545dc45-9902-4e51-9b4a-772c7f667e0e
+begin 
 model_1 = to_device(Chain(
 	Dense(28*28=>800,relu),
 	Dense(800=>120,sigmoid),
 	Dense(120=>10),
 	softmax
 ))
+model_2 = to_device(Chain(
+	Dense(28*28=>800,relu),
+	Dense(800=>120,sigmoid),
+	Dense(120=>10),
+	softmax
+))
+model_3 = to_device(Chain(
+	Dense(28*28=>800,relu),
+	Dense(800=>120,sigmoid),
+	Dense(120=>10),
+	softmax
+))
+end
 
 # ╔═╡ d88b258c-cfcd-416b-b15a-b3f864b04030
 md"""
-Si quiseramos saber cual es la predicción del modelo sin entrenar por ejemplo para la primera matriz de datos podemos realizar la siguiente operación:
-
-```julia
-model(Flux.unsqueeze(X_train[:,:,1],dims=3))
-```
-Usamos la función `unsqueeze` para convertir la imagen de la forma (28,28) a la forma de (28,28,1). La función del modelo en este caso recibe una única imagen de tamaño 28x28.
+Probemos que las dimensiones del modelo encajan 
 """
 
 # ╔═╡ 03d4b7de-cf8d-4428-87d9-f5be59e6aaf3
 begin
-	#model_1(Flux.unsqueeze(X_train[:,:,1],dims=3))
 	img = X_train[:,:,1]
-	#x = Flux.unsqueeze(img,dims=3)
-	#x[:,:,1]
-	#z = Flux.unsqueeze(Flux.flatten(img),dims=3)
 	s = to_device(reshape(img,28*28,1)) 
-	model_1(s)
+	model_1(s) |> cpu
 end
 
 # ╔═╡ eaeeb678-e690-4de1-8a65-84bff36f24ae
@@ -222,8 +163,8 @@ md"""
 
 # ╔═╡ 7853b8f8-5302-4914-a7c8-ef160669a6fe
 begin 
-	data1 = Flux.DataLoader((X_train,y_train),batchsize=100,shuffle=true)
-	val1 = Flux.DataLoader((X_val,y_val),batchsize=32,shuffle=true)
+	data_train = Flux.DataLoader((X_train,y_train),batchsize=100,shuffle=true)
+	data_val = [X_val,y_val]
 end
 
 # ╔═╡ 3f90f311-2892-4a51-a47c-e9b3bc02573d
@@ -233,7 +174,7 @@ md"""
 """
 
 # ╔═╡ 266a746d-0ec4-458c-ae3b-a861169e5200
-function accuracy(m,x,y) 
+function accuracy(m,x,y)
 	X = reshape(x[:,:,1:end],28*28,size(x,3))
 	mean( Flux.onecold(m(X),0:9) .== Flux.onecold(y,0:9))
 end
@@ -248,21 +189,33 @@ md"""
 """
 
 # ╔═╡ 35150b4a-3f1e-4af2-bdd9-2640894a419c
-function train_model!(model,loss::Function,train_loader,val_loader,opt;epochs=2)
+function train_model!(
+	model,
+	loss::Function,
+	train_loader,
+	val_loader,
+	opt,metric;epochs=2
+	)
+	n_batches = length(data_train)
 	p = Flux.params(model)
-	acc_test = zeros(epochs)
-	for i in 1:epochs
-		for (X_train, y_train) in train_loader
+	acc_test   = zeros(n_batches*epochs)
+	loss_train = zeros(n_batches*epochs)
+	loss_test  = zeros(n_batches*epochs)
+	X_val, y_val = data_val 
+	for epoch in 1:epochs
+		for (iter,Xy) in enumerate(train_loader)
+			X_train, y_train = Xy
 			X_train, y_train = to_device(X_train), to_device(y_train)
 			gs = gradient(() -> loss(model,X_train, y_train), p)
 		    Flux.Optimise.update!(opt, p, gs)
+			acc_test[iter+n_batches*(epoch-1)] = metric(model,to_device(X_val),to_device(y_val))
+			
+			loss_train[iter+n_batches*(epoch-1)] = loss(model,to_device(X_train),to_device(y_train))
+
+			loss_test[iter+n_batches*(epoch-1)] = loss(model,to_device(X_val),to_device(y_val))
 		end
-		val_accuracy=mean([accuracy(model,to_device(X_val),to_device(y_val)) for (X_val, y_val) in val_loader])
-    	println("Epoch: $i, Validation Accuracy: $val_accuracy")
-		acc_test[i] = val_accuracy
 	end
-	plot(acc_test, xlabel="Iteración", ylabel="Test accuracy", label="", ylim=(-0.01,1.01))
-	
+	return acc_test, loss_test, loss_train
 end
 
 # ╔═╡ 2fff20de-4831-4d34-95de-27f3b4d8ae51
@@ -278,18 +231,18 @@ md"""
 
 # ╔═╡ 9098ed3e-62bb-4fee-923c-a4969d489be3
 begin 
-	opt = Flux.Optimise.Descent()
+	descent = Flux.Optimise.Descent()
+	momentum = Flux.Optimise.Momentum()
+	adam = Flux.Optimise.Adam()
 	
 	function L(m,x,y)
 		X = reshape(x[:,:,1:end],28*28,size(x,3))
 		Flux.Losses.crossentropy(m(X),y)
 	end
-	train_model!(model_1,L,data1,val1,opt)
-end
-
-# ╔═╡ 133ebbd8-e266-46b1-8bd9-a46df3ab2dbe
-begin 
 	
+	graphs_d = train_model!(model_1,L,data_train,data_val,descent,accuracy)
+	graphs_m = train_model!(model_2,L,data_train,data_val,momentum,accuracy)
+	graphs_adam = train_model!(model_3,L,data_train,data_val,adam,accuracy)
 end
 
 # ╔═╡ ba9a94e8-40ef-42ad-a941-dce9ad1d2435
@@ -298,8 +251,29 @@ md"""
 	Relizar un grafico que muestre el avance de la precisión del modelo y uno que muestre el resultado de la función de pérdida comparando los distintos optimizadores.
 """
 
-# ╔═╡ 8210e8d7-5e9e-4163-bd5a-d3bbf7f03ab0
-#completar
+# ╔═╡ 7677186c-d470-498f-85d1-34c2a5da113c
+function gf_pre_loss(G,method)
+	acc_grap, loss_grap = G
+	
+	num_images = 2
+	num_cols = min(3, num_images)  
+	num_rows = ceil(Int, num_images / num_cols)  
+
+	plot(layout=(num_rows, num_cols),title = method)
+	size = (700,300)
+	
+	plot!(acc_grap,subplot=1,xlabel="Iteración", ylabel="Test accuracy", label="", ylim=(-0.01,1.01),xscale=:log10,size=size)
+	plot!(loss_grap,subplot=2,xlabel="Iteración", ylabel="Test loss", label="", ylim=(-0.01,2),size=size)
+end
+
+# ╔═╡ 5fc1bb42-0229-42a6-b316-0a0b3e9bd7ec
+gf_pre_loss([graphs_d[1],graphs_d[2]],"Gradiente descendiente")
+
+# ╔═╡ 8d767caa-fae1-476e-82e5-ba1f7eb14a61
+gf_pre_loss([graphs_m[1],graphs_m[2]],"Momentum")
+
+# ╔═╡ ecaa5dc4-ccf2-409d-bdf3-62c0bd3cb0c0
+gf_pre_loss([graphs_adam[1],graphs_adam[2]],"Adam")
 
 # ╔═╡ badeffab-386a-4a3b-8c5d-8588ec26df80
 md"""
@@ -307,8 +281,29 @@ md"""
 	Realizar un único grafico donde se vea la ```loss_{train}``` y ```loss_{test}``` en función de la cantidad de iteraciones para cada uno de los métodos de descenso.
 """
 
+# ╔═╡ ffd797b9-e765-494c-abf3-2f2927428971
+function gf_loss(G,method)
+	loss_val,loss_train = G
+	
+	num_images = 2
+	num_cols = min(3, num_images)  
+	num_rows = ceil(Int, num_images / num_cols)  
+
+	plot(layout=(num_rows, num_cols),title = method)
+	size = (800,300)
+	
+	plot!(loss_train,subplot=1,xlabel="Iteración", ylabel="Loss de train", label="", ylim=(-0.01,2),size=size)
+	plot!(loss_val,subplot=2,xlabel="Iteración", ylabel="Loss de validacion", label="", ylim=(-0.01,2),size=size)
+end
+
 # ╔═╡ 8e1991dd-7ee8-4cf8-8370-bf4cb815a0d5
-#completar
+gf_loss([graphs_d[2],graphs_d[3]],"Gradiente descendiente")
+
+# ╔═╡ 1de7ac5a-2692-4eaf-b70d-cbbf2971a682
+gf_loss([graphs_m[2],graphs_m[3]],"Momentum")
+
+# ╔═╡ 9ee4cd38-eca0-42f4-9db0-6ff37d68bb8c
+gf_loss([graphs_adam[2],graphs_adam[3]],"Adam")
 
 # ╔═╡ 4a3dc8cd-9d21-4a8a-8777-cb043e3ce22f
 md"""
@@ -317,7 +312,9 @@ md"""
 """
 
 # ╔═╡ 2c284bb5-57be-48f4-a970-3f0600332836
-#responder
+md""" 
+Observamos que el optimizador con el metodo del gradiente descendiente junto con el de momentum fueron muy similares tanto para el dataset de validacion como el de entrenamiento, y por ultimo Adam fue el que mejor desempenio tuvo ya que con menos iteraciones descendio mas que sus homologos tanto para el dataset de entrenamiento como el de validacion.
+"""
 
 # ╔═╡ 6f1727bb-9e06-44a3-aa81-9b31864baf3b
 md"""
@@ -343,7 +340,8 @@ md"""
 """
 
 # ╔═╡ 0ffc22b3-9dcd-496a-a694-1ef3675396f4
-model_2 = to_device(Chain(
+begin
+modelc_1 = to_device(Chain(
 	Conv((5,5),1 => 8,relu),
     MaxPool((2,2)),
     Conv((5,5),8 => 16,relu),
@@ -354,6 +352,29 @@ model_2 = to_device(Chain(
     Dense(20=>10),
     softmax
 ) )
+modelc_2 = to_device(Chain(
+	Conv((5,5),1 => 8,relu),
+    MaxPool((2,2)),
+    Conv((5,5),8 => 16,relu),
+    MaxPool((2,2)),
+    Flux.flatten,
+    Dense(4*4*16=>150,relu),
+    Dense(150=>20,sigmoid),
+    Dense(20=>10),
+    softmax
+) )
+modelc_3 = to_device(Chain(
+	Conv((5,5),1 => 8,relu),
+    MaxPool((2,2)),
+    Conv((5,5),8 => 16,relu),
+    MaxPool((2,2)),
+    Flux.flatten,
+    Dense(4*4*16=>150,relu),
+    Dense(150=>20,sigmoid),
+    Dense(20=>10),
+    softmax
+) )
+end
 
 # ╔═╡ 88ac49df-5c4d-4878-8b0e-559d4d48d6f8
 md"""
@@ -362,7 +383,9 @@ md"""
 """
 
 # ╔═╡ c344393c-76ca-46ed-bd72-bf69719eafb0
-#completar mismo dataset para el modelo anterior
+md""" 
+Usamos el mismo dataset del primer Entrenamiento.
+"""
 
 # ╔═╡ 2f8a416e-6692-415b-aa5c-69ccedae6244
 md"""
@@ -370,8 +393,38 @@ md"""
 	Repetir el ejercicio 8 y realizar un gráfico comparando la Loss de la red neuronal multicapa y la red neuronal convolucional para cada método de descenso.
 """
 
+# ╔═╡ 178e6a90-0abb-475c-a681-b8579dfc8606
+function MLP_CNN_loss(G,method)
+	loss_MLP,loss_CNN = G
+	
+	plot(loss_MLP,xlabel="Iteración", ylabel="Loss", label="lossMLP", ylim=(-0.01,2),title = method)
+	plot!(loss_CNN,label="lossCNN")
+end
+
 # ╔═╡ d20c2f60-6536-4a27-a22f-844f6e9ecd46
-#completar
+begin
+	function L2(m,x,y) 
+		X = reshape(x[:,:,1:end],(28,28,1,size(x,3)))
+		Flux.Losses.crossentropy(m(X),y)
+	end
+	function accuracy2(m,x,y)
+		X = reshape(x[:,:,1:end],(28,28,1,size(x,3)))
+		mean( Flux.onecold(m(X),0:9) .== Flux.onecold(y,0:9))
+	end
+	
+	graphs_dc = train_model!(modelc_1,L2,data_train,data_val,descent,accuracy2)
+	graphs_mc = train_model!(modelc_2,L2,data_train,data_val,momentum,accuracy2)
+	graphs_adamc = train_model!(modelc_3,L2,data_train,data_val,adam,accuracy2)
+end
+
+# ╔═╡ b9dd50a5-439a-4066-8c29-2b382b2afb39
+MLP_CNN_loss([graphs_d[2],graphs_dc[2]],"Gradiente descendiente")
+
+# ╔═╡ b06c3435-4212-467f-9834-358c20f2dbfa
+MLP_CNN_loss([graphs_m[2],graphs_mc[2]],"Momentum")
+
+# ╔═╡ ae8b5f82-878a-41ce-ad9e-17e245cefe0e
+MLP_CNN_loss([graphs_adam[2],graphs_adamc[2]],"Adam")
 
 # ╔═╡ e04b70d3-1f3f-484c-a906-6ef27644b849
 md"""
@@ -380,7 +433,13 @@ md"""
 """
 
 # ╔═╡ 0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
-#completar
+md""" 
+Vemos que el metodo clasico (gradiente descendiente) para el modelo CNN presenta inestabilidad lo cual es aceptable pues sabemos que una de sus desventajas es que puede tener oscilaciones, lo cual empiricamente estamos viendo.
+
+Los 3 solvers parecen tener la misma velocidad de convergencia, para los modelos CNNs, pareciera que tienden a la misma velocidad. 
+
+Sin embargo para los modelos MLPs esto cambia, pues Adam saca una clara ventaja sobre los demas.  
+"""
 
 # ╔═╡ 442d3c42-44e3-4525-a215-8526c61083db
 md"""
@@ -391,6 +450,31 @@ md"""
 md"""
 !!! note "Ejercicio bonus (no obligatorio)"
 	Implementar una función que tomé como argumento una imagen de las alojadas en el archivo .rar y retorne el dígito que contenga dicha imagen.
+"""
+
+# ╔═╡ 8dccb0e1-a31e-4497-b3f2-05b3390fdf69
+md""" 
+Los siguientes son los resultados de las predicciones de cada modelo entrenado, ordenado de forma ascendente, es decir [0,1,2,3,4,5,6,7,8,9] seria el resultado ideal pues se haria una prediccion perfecta.
+"""
+
+# ╔═╡ 683721c9-e888-4260-9f4b-abd5f9627239
+md"""
+Modelo MLP 
+"""
+
+# ╔═╡ 11c3a971-d975-4728-bc30-6e7cf9bbb680
+predictions(model_1,true)
+
+# ╔═╡ 68d2fdb9-5e60-4ddd-995c-0c84f12ad68d
+md""" 
+Modelo CNN 
+"""
+
+# ╔═╡ b213ad0a-d20d-4cd2-b10e-70b977291f8b
+predictions(modelc_1,false)
+
+# ╔═╡ 73c660cf-d3e1-4156-a836-2e3ccc94b4a2
+md"""  Tengamos en cuenta que los modelos fueron entrenados con una sola epoca, por lo que hasta cierto punto tiene sentido que se "equivoquen" en la prediccion del 2 con el 8 para el caso de MLP y el 2 con el 1 en el caso de CNN.
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2986,15 +3070,12 @@ version = "1.4.1+1"
 # ╟─15d48a70-0647-11ef-1a68-fb486549b55d
 # ╟─21cf705c-7852-498c-8ac4-a3cbc6e48d9d
 # ╠═f92178d8-5c5b-42e8-9d98-672cb500a2f1
-# ╠═a4a663fd-0222-4799-b140-53adbf7f74ec
 # ╟─818b52b9-bb51-448e-8d21-536de39b8c83
-# ╟─3bd8022f-0331-4b8f-8103-08f8141185ac
 # ╟─cbc7cf07-834a-4ee8-9103-9edf0c63f50a
 # ╠═2c554f3d-ccdd-4d57-a7e0-52d9be974294
 # ╟─be5c6489-b410-473b-a875-7e25a0313175
-# ╠═6dc9f1b8-41d9-47ac-9b64-59d4468b7c87
+# ╟─6dc9f1b8-41d9-47ac-9b64-59d4468b7c87
 # ╟─7fb568c1-e4bd-41da-8924-30b13d5011b7
-# ╠═1aa88a80-92eb-4a5c-88d0-88f4207cd0d0
 # ╠═f2447db1-4234-4e2f-9791-7803513574b3
 # ╟─4fa39e63-cb80-4125-ad7e-80ef1f7cba4f
 # ╟─e1d56012-ddd8-4efe-b6f7-72bd88c7dd1c
@@ -3017,25 +3098,40 @@ version = "1.4.1+1"
 # ╠═35150b4a-3f1e-4af2-bdd9-2640894a419c
 # ╟─2fff20de-4831-4d34-95de-27f3b4d8ae51
 # ╠═9098ed3e-62bb-4fee-923c-a4969d489be3
-# ╠═133ebbd8-e266-46b1-8bd9-a46df3ab2dbe
 # ╟─ba9a94e8-40ef-42ad-a941-dce9ad1d2435
-# ╠═8210e8d7-5e9e-4163-bd5a-d3bbf7f03ab0
+# ╠═7677186c-d470-498f-85d1-34c2a5da113c
+# ╟─5fc1bb42-0229-42a6-b316-0a0b3e9bd7ec
+# ╟─8d767caa-fae1-476e-82e5-ba1f7eb14a61
+# ╟─ecaa5dc4-ccf2-409d-bdf3-62c0bd3cb0c0
 # ╟─badeffab-386a-4a3b-8c5d-8588ec26df80
-# ╠═8e1991dd-7ee8-4cf8-8370-bf4cb815a0d5
+# ╠═ffd797b9-e765-494c-abf3-2f2927428971
+# ╟─8e1991dd-7ee8-4cf8-8370-bf4cb815a0d5
+# ╟─1de7ac5a-2692-4eaf-b70d-cbbf2971a682
+# ╟─9ee4cd38-eca0-42f4-9db0-6ff37d68bb8c
 # ╟─4a3dc8cd-9d21-4a8a-8777-cb043e3ce22f
-# ╠═2c284bb5-57be-48f4-a970-3f0600332836
+# ╟─2c284bb5-57be-48f4-a970-3f0600332836
 # ╟─6f1727bb-9e06-44a3-aa81-9b31864baf3b
 # ╟─dcf7d941-18ff-4c37-bb65-4c73a9a47df6
 # ╟─6b083ebb-f9f3-490b-9bf3-3f11318c54aa
 # ╟─0ce10511-6c28-4e4f-9cb1-35577c1e2cfe
 # ╠═0ffc22b3-9dcd-496a-a694-1ef3675396f4
 # ╟─88ac49df-5c4d-4878-8b0e-559d4d48d6f8
-# ╠═c344393c-76ca-46ed-bd72-bf69719eafb0
+# ╟─c344393c-76ca-46ed-bd72-bf69719eafb0
 # ╟─2f8a416e-6692-415b-aa5c-69ccedae6244
+# ╟─178e6a90-0abb-475c-a681-b8579dfc8606
 # ╠═d20c2f60-6536-4a27-a22f-844f6e9ecd46
+# ╟─b9dd50a5-439a-4066-8c29-2b382b2afb39
+# ╟─b06c3435-4212-467f-9834-358c20f2dbfa
+# ╟─ae8b5f82-878a-41ce-ad9e-17e245cefe0e
 # ╟─e04b70d3-1f3f-484c-a906-6ef27644b849
-# ╠═0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
+# ╟─0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
 # ╟─442d3c42-44e3-4525-a215-8526c61083db
 # ╟─7bf1a8fa-7de3-4499-920d-3fbf8f7a79c4
+# ╟─8dccb0e1-a31e-4497-b3f2-05b3390fdf69
+# ╟─683721c9-e888-4260-9f4b-abd5f9627239
+# ╠═11c3a971-d975-4728-bc30-6e7cf9bbb680
+# ╟─68d2fdb9-5e60-4ddd-995c-0c84f12ad68d
+# ╠═b213ad0a-d20d-4cd2-b10e-70b977291f8b
+# ╟─73c660cf-d3e1-4156-a836-2e3ccc94b4a2
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
