@@ -92,9 +92,9 @@ md"""
 # ╔═╡ 3545dc45-9902-4e51-9b4a-772c7f667e0e
 begin 
 model_1 = to_device(Chain(
-	Dense(28*28=>800,relu),
-	Dense(800=>120,sigmoid),
-	Dense(120=>10),
+	Dense(28*28=>200,relu),
+	Dense(200=>60,sigmoid),
+	Dense(60=>10),
 	softmax
 ))
 model_2 = to_device(Chain(
@@ -313,7 +313,7 @@ md"""
 
 # ╔═╡ 2c284bb5-57be-48f4-a970-3f0600332836
 md""" 
-Observamos que el optimizador con el metodo del gradiente descendiente junto con el de momentum fueron muy similares tanto para el dataset de validacion como el de entrenamiento, y por ultimo Adam fue el que mejor desempenio tuvo ya que con menos iteraciones descendio mas que sus homologos tanto para el dataset de entrenamiento como el de validacion.
+Observamos que el optimizador con el método del gradiente descendiente, junto con el de momentum, tuvo un rendimiento muy similar tanto en el dataset de validación como en el de entrenamiento. Por último, Adam fue el que tuvo el mejor desempeño, ya que con menos iteraciones logró una mayor reducción en la pérdida, tanto en el dataset de entrenamiento como en el de validación.
 """
 
 # ╔═╡ 6f1727bb-9e06-44a3-aa81-9b31864baf3b
@@ -347,9 +347,8 @@ modelc_1 = to_device(Chain(
     Conv((5,5),8 => 16,relu),
     MaxPool((2,2)),
     Flux.flatten,
-    Dense(4*4*16=>150,relu),
-    Dense(150=>20,sigmoid),
-    Dense(20=>10),
+    Dense(4*4*16=>30,relu),
+    Dense(30=>10),
     softmax
 ) )
 modelc_2 = to_device(Chain(
@@ -358,9 +357,8 @@ modelc_2 = to_device(Chain(
     Conv((5,5),8 => 16,relu),
     MaxPool((2,2)),
     Flux.flatten,
-    Dense(4*4*16=>150,relu),
-    Dense(150=>20,sigmoid),
-    Dense(20=>10),
+    Dense(4*4*16=>30,relu),
+    Dense(30=>10),
     softmax
 ) )
 modelc_3 = to_device(Chain(
@@ -369,9 +367,8 @@ modelc_3 = to_device(Chain(
     Conv((5,5),8 => 16,relu),
     MaxPool((2,2)),
     Flux.flatten,
-    Dense(4*4*16=>150,relu),
-    Dense(150=>20,sigmoid),
-    Dense(20=>10),
+    Dense(4*4*16=>30,relu),
+    Dense(30=>10),
     softmax
 ) )
 end
@@ -434,11 +431,11 @@ md"""
 
 # ╔═╡ 0a8d1d0e-f6b3-4ba6-8f0c-9aa98f88a43a
 md""" 
-Vemos que el metodo clasico (gradiente descendiente) para el modelo CNN presenta inestabilidad lo cual es aceptable pues sabemos que una de sus desventajas es que puede tener oscilaciones, lo cual empiricamente estamos viendo.
+Observamos que el método clásico (gradiente descendiente) para el modelo CNN presenta inestabilidad, lo cual es aceptable dado que sabemos que una de sus desventajas es la posibilidad de oscilaciones, lo que estamos viendo empíricamente.
 
-Los 3 solvers parecen tener la misma velocidad de convergencia, para los modelos CNNs, pareciera que tienden a la misma velocidad. 
+Los tres solvers parecen tener la misma velocidad de convergencia en los modelos CNN, pues tienden a la misma velocidad.
 
-Sin embargo para los modelos MLPs esto cambia, pues Adam saca una clara ventaja sobre los demas.  
+Sin embargo, para los modelos MLP, esto cambia, ya que Adam muestra una clara ventaja sobre los demás.
 """
 
 # ╔═╡ 442d3c42-44e3-4525-a215-8526c61083db
