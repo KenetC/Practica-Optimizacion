@@ -191,29 +191,35 @@ md"""
 # ╔═╡ 35150b4a-3f1e-4af2-bdd9-2640894a419c
 function train_model!(
 	model,
-	loss::Function,
 	train_loader,
 	val_loader,
 	opt,metric;epochs=2
 	)
+	loss(x,y) = Flux.Losses.crossentropy(model(reshape(x[:,:,1:end],28*28,size(x,3))),y)
+	
 	n_batches = length(data_train)
 	p = Flux.params(model)
-	acc_test   = zeros(n_batches*epochs)
-	loss_train = zeros(n_batches*epochs)
-	loss_test  = zeros(n_batches*epochs)
+	acc_test   = zeros(epochs)
+	loss_train = zeros(epochs)
+	loss_test  = zeros(epochs)
 	X_val, y_val = data_val 
 	for epoch in 1:epochs
-		for (iter,Xy) in enumerate(train_loader)
-			X_train, y_train = Xy
-			X_train, y_train = to_device(X_train), to_device(y_train)
-			gs = gradient(() -> loss(model,X_train, y_train), p)
-		    Flux.Optimise.update!(opt, p, gs)
-			acc_test[iter+n_batches*(epoch-1)] = metric(model,to_device(X_val),to_device(y_val))
+		Flux.train!(loss,p,train_loader,opt)
+		#acc_test[epoch]   = metric(model,to_device(X_val),to_device(y_val))
+		#loss_train[epoch] = loss(model,to_device(X_train),to_device(y_train))
+		#loss_test[epoch]  = loss(model,to_device(X_val),to_device(y_val))
+		
+		# for (iter,Xy) in enumerate(train_loader)
+		# 	X_train, y_train = Xy
+		# 	X_train, y_train = to_device(X_train), to_device(y_train)
+		# 	data = 
+		# 	Flux.train!(loss,ps,data,opt)
+		# 	acc_test[iter+n_batches*(epoch-1)] = metric(model,to_device(X_val),to_device(y_val))
 			
-			loss_train[iter+n_batches*(epoch-1)] = loss(model,to_device(X_train),to_device(y_train))
+		# 	loss_train[iter+n_batches*(epoch-1)] = loss(model,to_device(X_train),to_device(y_train))
 
-			loss_test[iter+n_batches*(epoch-1)] = loss(model,to_device(X_val),to_device(y_val))
-		end
+		# 	loss_test[iter+n_batches*(epoch-1)] = loss(model,to_device(X_val),to_device(y_val))
+		# end
 	end
 	return acc_test, loss_test, loss_train
 end
@@ -235,14 +241,9 @@ begin
 	momentum = Flux.Optimise.Momentum()
 	adam = Flux.Optimise.Adam()
 	
-	function L(m,x,y)
-		X = reshape(x[:,:,1:end],28*28,size(x,3))
-		Flux.Losses.crossentropy(m(X),y)
-	end
-	
-	graphs_d = train_model!(model_1,L,data_train,data_val,descent,accuracy)
-	graphs_m = train_model!(model_2,L,data_train,data_val,momentum,accuracy)
-	graphs_adam = train_model!(model_3,L,data_train,data_val,adam,accuracy)
+	graphs_d = train_model!(model_1,data_train,data_val,descent,accuracy)
+	#graphs_m = train_model!(model_2,L,data_train,data_val,momentum,accuracy)
+	#graphs_adam = train_model!(model_3,L,data_train,data_val,adam,accuracy)
 end
 
 # ╔═╡ ba9a94e8-40ef-42ad-a941-dce9ad1d2435
@@ -501,7 +502,7 @@ cuDNN = "~1.3.2"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "3bbdb82f2f4ab45a5df109013ad2b0610abb7919"
 
