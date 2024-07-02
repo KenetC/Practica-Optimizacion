@@ -14,170 +14,106 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ a6a61f01-d094-4c84-876b-ae5125c3b3fb
-using LinearAlgebra, Plots, PlutoUI
+# ╔═╡ 6da5b5d0-3a03-4a32-b8ac-a2c164504554
+using LinearAlgebra, Plots, PlutoUI 
 
-# ╔═╡ 598d505a-0c6c-11ef-064c-f16bc5f13328
+# ╔═╡ ca565f30-0e2d-11ef-281d-d117420c0393
 md"""
-# Gradiente Conjugado (cuadráticas)
+# Seguimos con Gradiente Conjugado
 """
 
-# ╔═╡ 16b2ccff-56aa-4342-a3e1-a82bf6e092f1
+# ╔═╡ 7113e3d9-66f7-460e-a78e-05ac81545f9a
 md"""
-**Definición:** Sea  $A\in \mathbb{R}^{n×n}$ definida positiva, diremos que los vectores  $d_0,d_1,…,d_{n−1}\in\mathbb{R}^{n}\backslash \{0\}$ son A-conjugados si: 
+#### Algoritmo de Gradientes Conjugados (para cuadráticas)
 
-$$d_i^tAd_j=0$$
-
-**Lema:** Sea  $A\in\mathbb{R}^{n×n}$ definida positiva, cualquier conjunto de vectores A-conjugados es linealmente independiente.
-
-Sea  $f:\mathbb{R}^n→\mathbb{R}$ dada por: $f(x)=\frac{1}{2}x^tAx+bx^t+c$ con  $A\in\mathbb{R}^{n×n}$ definida positiva,  $b∈\mathbb{R}^n$, $c∈\mathbb{R}$.
-
-Sea $\{d_0, \dots, d_k\}$ un conjunto de vectores A-conjugados cualquiera, la idea consiste en tomar: 
-
-$$x_{k+1} = x_{k} + t_kd_k \quad \text{donde} \quad t_k = \underset{t\in\mathbb{R}}{\mathrm{argmin}}\{f(x_k + td_k)\}$$
-
-Notar que, como no sabemos si los  $d_k$ son direcciones de descenso, no pedimos que  $t_k$ sea necesariamente positivo. Nuevamente, definimos  $φ(t)=f(x_k+td_k)$ y, como  $f$ es cuadrática, podemos hallar el $t$ óptimo:
-
-$\begin{array}{l} 0 = \varphi'(t_k) = \nabla f(x_{k} + t_kd_k)^Td_k = \nabla f(x_{k+1})^Td_k \\ 
-\nabla f(x_{k+1}) = Ax_{k+1} + b =A(x_k + t_kd_k) + b = \nabla f(x_k) + t_kAd_k \\
-\Rightarrow t_k = - \dfrac{\nabla f(x_k)^T d_k}{(d_k)^TAd_k}\end{array}$
-
+```julia
+dada f,x₀,ε
+d₀=-∇f(x₀)
+while norm(∇f(xₖ))>ε
+	αₖ=-(∇f(xₖ))'dₖ/(dₖ'Adₖ)
+	xₖ₊₁=xₖ+αₖdₖ
+	βₖ=dₖ'A∇f(xₖ₊₁)/dₖ'Adₖ
+	dₖ₊₁=-∇f(xₖ₊₁)+βₖdₖ
+```
 """
 
-# ╔═╡ f74c8e2b-dfb6-41ac-8464-ecee852198fe
+# ╔═╡ c1e2dada-5fe9-46e9-86e0-b475c7578c41
+#completar
+
+# ╔═╡ 9102e67b-61a6-4056-8285-936201dace9a
 md"""
-### Método de gradiente conjugado
+λ1 $(@bind λ1 Slider(0.1:0.5:1000))
 
-La idea consiste en que las direcciones conjugadas  $\{d_0,…,d_k\}$ sean definidas a partir del gradiente de  $f$. Sea $x_0∈\mathbb{R}^n$, se define $d_0=−∇f(x_0)$ y, para $k=0,1,…,n−2$ se define:
+λ2 $(@bind λ2 Slider(0.1:0.5:1000))
 
-$$d^{k+1} = -\nabla f(x_{k+1}) + \beta_kd_k$$
+λ3 $(@bind λ3 Slider(0.1:0.5:1000))
 
-donde  $β_k$ es calculado de manera tal que $d_k$ y $d_{k+1}$ sean A-conjugados:
+λ4 $(@bind λ4 Slider(0.1:0.5:1000))
 
-$$\beta_k = \dfrac{(d_k)^T A \nabla f(x_{k+1})}{(d_k)^TAd_k}$$
-
-**Obs:**  $d_k$ son direcciones de descenso:
-
-$$\nabla f(x_k)^T d_k = \nabla f(x_k)^T (-\nabla f(x_k)+\beta_{k-1}d_{k-1}) = -\lVert \nabla f(x_k) \rVert ^2$$
-
-**Teorema:** Sea  $f\colon \mathbb{R}^n \rightarrow \mathbb{R}$ dada por  $\frac{1}{2}x^TAx + bx^T +c$ con  $A∈\mathbb{R}^{n×n}$ definida positiva, $b∈\mathbb{R}^n$, $c∈\mathbb{R}$, entonces dado $x_0∈\mathbb{R}^n$, la secuencia definida anteriormente alcanza el minimizador $x^∗$ en n pasos (i.e.  $x_n=x^∗$).
-
-**Lema:** Sea  $x_0∈\mathbb{R}^n$, la secuencia definida anteriormente cumple que:
-
-$$\nabla f(x_k)^Td_j = 0 \quad \forall j=0,1,\dots,k-1$$
-
-
+λ5 $(@bind λ5 Slider(0.1:0.5:1000))
 """
 
-# ╔═╡ a92e4984-0495-43b4-97ca-9b1ccadb62b0
-md"""
-λ1 $(@bind λ1 Slider(1:0.5:100))
-
-λ2 $(@bind λ2 Slider(1:0.5:100))
-
-λ3 $(@bind λ3 Slider(1:0.5:100))
-
-λ4 $(@bind λ4 Slider(1:0.5:100))
-
-λ5 $(@bind λ5 Slider(1:0.5:100))
-"""
-
-# ╔═╡ 96ad091e-c7f1-4719-9f11-d53b4ff37824
-A = [λ1 0 0 0 0;0 λ2 0 0 0;0 0 λ3 0 0;0 0 0 λ4 0;0 0 0 0 λ5]
-
-# ╔═╡ 2a720ea1-26f4-4985-8e57-3eea5e087dd6
-md"""Sea:
-
-$f(x)=\frac{1}{2}x^t Ax - b^t\cdot x$
-"""
-
-# ╔═╡ ed73a4ca-9acf-48d1-a0da-e95fba8a89a9
-md"""
-!!! note "Ejercicio 1"
-	Calcular el mínimo exacto de la función enunciada anteriorimente con $b=(2,5,2,1,0)$
-"""
-
-# ╔═╡ 8adb753d-7e58-4f11-b40d-c23915bfaf58
+# ╔═╡ 11474266-ef19-4f30-a614-c01184e3975c
 begin
-	b = [2,5,2,1,0]
-	xsol = A\b
-	println(xsol)
+	A = [λ1 0 0 0 0;0 λ2 0 0 0;0 0 λ3 0 0;0 0 0 λ4 0;0 0 0 0 λ5]
+	b= [2,5,2,1,0]
 end
 
-# ╔═╡ 6f6e45e3-d703-4fc3-ac97-d9cc5990c28b
+# ╔═╡ cde1ab8a-d062-4479-94c2-b4640e676806
+sol_ex=A\b
+
+# ╔═╡ cff42c01-dc1b-4409-9c4c-56db580fc0fd
 md"""
-!!! note "Ejericicio 2"
-	Implementar el método de Gradiente Conjugados para funciones cuadráticas y corroborar el resultado usando la función de arriba. La implementación ademas del mínimo debe devolver la cantidad de pasos que realizó el método.
+!!! note "Ejercicio"
+	Realizar un gráfico que muestre la evolucion de $\|x_k-x^*\|_A$ en escala logaritmica. ¿Cómo es la convergencia?
 """
 
-# ╔═╡ e5b0ff2c-6a81-4c4b-b959-cc9e29add5dc
-# vamos a suponer que la funcion es cuadratica.
-function conjugate_gradient(A,b,c;x0=0,ϵ=0.001,N=100)
-	if x0 == 0 
-		r0 = b 
-		x0 = zeros(size(A,1))
-	else 
-		r0 = b - A*x0
+# ╔═╡ 25f122ab-fed8-4d24-9b48-56ca5f15ca87
+begin
+	v=zeros(size(res,1))
+	for i in 1:size(v,1)
+		v[i]=(res[i,:]-sol_ex)'*A*(res[i,:]-sol_ex)
 	end
-	if norm(r0) < ϵ 
-		return x0
-	end 
-	p0 = r0 ;x1 = x0; r1 = r0; p1 = p0 
-	k = 0 
-	parar = false 
-	while k < N && !parar 
-		x0 = x1; r0 = r1; p0 = p1 
-		α = transpose(r0)*r0 / (transpose(r0)*A*r0)
-		x1 = x0 + α*p0
-		r1 = r0 - α*A*p0
-		if norm(r1) < ϵ 
-			parar = true 
-			break
-		end
-		β = transpose(r1)*r1 / (transpose(r0)*r0)
-		p1 = r1 + β*p0
-		k += 1
-	end 
-	return x1 
+	plot(log.(v))
 end
+	
 
-# ╔═╡ 10758bf0-66e5-4205-a6ed-071365facbfb
-begin 
-	conjugate_gradient(A,b,0)
-end
-
-# ╔═╡ edf9308a-8d17-435e-9fca-a8da540b9ef7
+# ╔═╡ 5199b970-4b02-440a-a698-77eef06951d9
 md"""
-!!! note "Ejercicio 3"
-	Verificar la cota del ejercicio 5 de la guía. ¿Que sucede si los autovalores están mas separados?: 
-
-	$\|x_{x+1}-x^{*}\|_A\leq 2 (\frac{\sqrt{k(A)}-1}{\sqrt{k(A)}+1})^{k+1}\|x_0-x^{*}\|_A,$
-
-	donde $k(A)=cond(A)=\frac{\lambda_{max}}{\lambda_{min}}$
+!!! note "Ejercicio (Bonus)"
+	Implementar método de tangentes paralelas. Comparar con gradiente conjugado.
 """
 
-# ╔═╡ 54b438ae-04b0-407e-b9ed-fec59b1040e7
+# ╔═╡ 3771f547-7fa1-4f44-892b-d50336a3c317
 #completar
 
-# ╔═╡ ec65327c-968f-43fd-a9c3-0b614bcf97c7
+# ╔═╡ 32300cb2-3e86-406b-a47b-beedcf4ff26b
 md"""
-!!! note "Ejercicio 4"
-	Repetir lo anterior la función cuadratica $f(x)=\frac{1}{2}x^t Qx - B^t\cdot x$, donde la matriz $Q$ está dada por: 
-
-	$Q=\bigl(\begin{smallmatrix}Q1 & Q2 & Q3 & Q4\\ Q2 & Q1 & Q2 & Q3\\Q3 & Q2 & Q1&  Q2\\Q4 & Q3 & Q2 & Q1\end{smallmatrix}\bigr)$
+#### Extensión para funciones no cuadráticas
 """
 
-# ╔═╡ 530db6ec-d24c-4fc5-9652-9e0cf41c65c6
-begin
-	Q1=[12 8 7 6;8 12 8 7;7 8 12 8;6 7 8 12]
-	Q2=[3 2 1 0;2 3 2 1;1 2 3 2;0 1 2 3]
-	Q3=[2 1 0 0;1 2 1 0;0 1 2 1;0 0 1 2]
-	Q4=[1 0 0 0;0 1 0 0;0 0 1 0;0 0 0 1]
-	B=-[1;1;1;1;0;0;0;0;1;1;1;1;0;0;0;0]
-end
+# ╔═╡ 0371faaa-244e-457c-9158-cb9d2e4c71cf
+md"""
+Se deben encontrar otras maneras de obtener la longitud del paso  $t_k$ y el coeficiente  $β_k$. 
 
-# ╔═╡ 18d93f64-ae4c-4af8-80cb-b707147043ff
-#completar
+El paso se busca como hemos hecho antes usando Armijo, Wolfe, Sección aurea, etc.
+
+Para definir el coeficiente  $β_k$ se puede utilizar la fórmula de Fletcher y Reeves:
+
+$$\beta^{FR}_k = \dfrac{\nabla f(x^{k+1})^T \nabla f(x^{k+1})}{\nabla f(x^{k})^T \nabla f(x^{k})}$$
+
+Gradientes Conjugados para funciones no cuadráticas no necesariamente terminan en  $n$ pasos. Una práctica que da buenos resultados es reiniciar el  $β_k$ cada  $n$ iteraciones.
+"""
+
+# ╔═╡ d884191c-d967-4b25-a137-9f99188b6f02
+md"""
+!!! note "Ejercicio"
+	Usar el algoritmo de Fletcher-Reeves para hallar el mínimo de  
+
+	$$f(x)=100(x_2−x^2_1)^2+(1−x_1)^2$$ 
+
+	Usar $ε=10^−6$ y usarlo con tres puntos de partida distintos: $x_0=(−2,2)$, $x_0=(2,−2)$, y $x_0=(−2,−2)$.
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -216,9 +152,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.BitFlags]]
-git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
+git-tree-sha1 = "0691e34b3bb8be9307330f88d1a3c3f25466c24d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.8"
+version = "0.1.9"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -389,22 +325,22 @@ uuid = "559328eb-81f9-559d-9380-de523a88c83c"
 version = "1.0.14+0"
 
 [[deps.GLFW_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll"]
-git-tree-sha1 = "ff38ba61beff76b8f4acad8ab0c97ef73bb670cb"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
+git-tree-sha1 = "3f74912a156096bd8fdbef211eff66ab446e7297"
 uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
-version = "3.3.9+0"
+version = "3.4.0+0"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "p7zip_jll"]
-git-tree-sha1 = "ddda044ca260ee324c5fc07edb6d7cf3f0b9c350"
+git-tree-sha1 = "3e527447a45901ea392fe12120783ad6ec222803"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.5"
+version = "0.73.6"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "278e5e0f820178e8a26df3184fcb2280717c79b1"
+git-tree-sha1 = "182c478a179b267dd7a741b6f8f4c3e0803795d6"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.5+0"
+version = "0.73.6+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -455,9 +391,9 @@ version = "0.9.5"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
-git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+git-tree-sha1 = "b6d6bfdd7ce25b0f9b2f6b3dd56b2673a66c8770"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
-version = "0.2.4"
+version = "0.2.5"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -616,9 +552,9 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "18144f3e9cbe9b15b070288eef858f71b291ce37"
+git-tree-sha1 = "a2d09619db4e765091ee5c6ffe8872849de0feea"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.27"
+version = "0.3.28"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -717,9 +653,9 @@ version = "1.4.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "3da7367955dcc5c54c1ba4d402ccdc09a1a3e046"
+git-tree-sha1 = "a028ee3cb5641cccc4c24e90c36b0a4f7707bdf5"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.13+1"
+version = "3.0.14+0"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -815,9 +751,9 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
-git-tree-sha1 = "37b7bb7aabf9a085e0044307e1717436117f2b3b"
+git-tree-sha1 = "492601870742dcd38f233b23c3ec629628c1d724"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
-version = "6.5.3+1"
+version = "6.7.1+1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -937,9 +873,9 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "5d54d076465da49d6746c647022f3b3674e64156"
+git-tree-sha1 = "d73336d81cafdc277ff45558bb7eaa2b04a8e472"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.8"
+version = "0.10.10"
 weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
@@ -1013,15 +949,15 @@ version = "1.31.0+0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "52ff2af32e591541550bd753c0da8b9bc92bb9d9"
+git-tree-sha1 = "d9717ce3518dc68a99e6b96300813760d887a01d"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.12.7+0"
+version = "2.13.1+0"
 
 [[deps.XSLT_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
-git-tree-sha1 = "91844873c4085240b95e795f692c4cec4d805f8a"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "XML2_jll", "Zlib_jll"]
+git-tree-sha1 = "a54ee957f4c86b526460a720dbc882fa5edcbefc"
 uuid = "aed1982a-8fda-507f-9586-7b0439959a61"
-version = "1.1.34+0"
+version = "1.1.41+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1109,9 +1045,9 @@ version = "0.1.1+0"
 
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "XSLT_jll", "Xorg_libXau_jll", "Xorg_libXdmcp_jll", "Xorg_libpthread_stubs_jll"]
-git-tree-sha1 = "b4bfde5d5b652e22b9c790ad00af08b6d042b97d"
+git-tree-sha1 = "bcd466676fef0878338c61e655629fa7bbc69d8e"
 uuid = "c7cfdc94-dc32-55de-ac96-5a1b8d977c5b"
-version = "1.15.0+0"
+version = "1.17.0+0"
 
 [[deps.Xorg_libxkbfile_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
@@ -1285,22 +1221,19 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─598d505a-0c6c-11ef-064c-f16bc5f13328
-# ╟─16b2ccff-56aa-4342-a3e1-a82bf6e092f1
-# ╟─f74c8e2b-dfb6-41ac-8464-ecee852198fe
-# ╠═a6a61f01-d094-4c84-876b-ae5125c3b3fb
-# ╟─a92e4984-0495-43b4-97ca-9b1ccadb62b0
-# ╠═96ad091e-c7f1-4719-9f11-d53b4ff37824
-# ╟─2a720ea1-26f4-4985-8e57-3eea5e087dd6
-# ╟─ed73a4ca-9acf-48d1-a0da-e95fba8a89a9
-# ╠═8adb753d-7e58-4f11-b40d-c23915bfaf58
-# ╟─6f6e45e3-d703-4fc3-ac97-d9cc5990c28b
-# ╠═e5b0ff2c-6a81-4c4b-b959-cc9e29add5dc
-# ╠═10758bf0-66e5-4205-a6ed-071365facbfb
-# ╟─edf9308a-8d17-435e-9fca-a8da540b9ef7
-# ╠═54b438ae-04b0-407e-b9ed-fec59b1040e7
-# ╟─ec65327c-968f-43fd-a9c3-0b614bcf97c7
-# ╠═530db6ec-d24c-4fc5-9652-9e0cf41c65c6
-# ╠═18d93f64-ae4c-4af8-80cb-b707147043ff
+# ╟─ca565f30-0e2d-11ef-281d-d117420c0393
+# ╠═6da5b5d0-3a03-4a32-b8ac-a2c164504554
+# ╟─7113e3d9-66f7-460e-a78e-05ac81545f9a
+# ╠═c1e2dada-5fe9-46e9-86e0-b475c7578c41
+# ╠═9102e67b-61a6-4056-8285-936201dace9a
+# ╠═11474266-ef19-4f30-a614-c01184e3975c
+# ╠═cde1ab8a-d062-4479-94c2-b4640e676806
+# ╟─cff42c01-dc1b-4409-9c4c-56db580fc0fd
+# ╠═25f122ab-fed8-4d24-9b48-56ca5f15ca87
+# ╟─5199b970-4b02-440a-a698-77eef06951d9
+# ╠═3771f547-7fa1-4f44-892b-d50336a3c317
+# ╟─32300cb2-3e86-406b-a47b-beedcf4ff26b
+# ╟─0371faaa-244e-457c-9158-cb9d2e4c71cf
+# ╟─d884191c-d967-4b25-a137-9f99188b6f02
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

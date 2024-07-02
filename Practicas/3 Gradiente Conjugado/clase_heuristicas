@@ -1,0 +1,407 @@
+{
+    "cells": [
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "# Heuristicas"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "Muchos de los problemas que surgen naturalmente en el mundo real, en especial los problemas de optimización, son al menos NP-Completos. Esto quiere decir que son problemas para los cuales todavía no existe un algoritmo que los resuelva eficientemente.\n",
+       "\n",
+       "Generalmente, se utilizan heurísticas para hallar buenas soluciones a esos problemas. Por buenas soluciones, entendemos que, si bien no podemos asegurar que sean óptimas, resultan beneficiosas al aplicarse a los problemas que desean resolverse.\n",
+       "\n",
+       "Muchos de los métodos que vimos en la materia funcionan bien para hallar mínimos locales, pero, como hemos visto, por sí mismos no alcanzan para hallar buenas soluciones.\n",
+       "\n",
+       "Definimos *calidad* de una solución $s$ como:\n",
+       "\n",
+       "* $calidad(s)\\geq calidad(s') \\Leftrightarrow f(s)\\leq f(s')$"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "### Paseo Aleatorio\n",
+       "\n",
+       "Consiste en recorrer el dominio de la función objetivo de manera aleatoria, guardando el punto con la mejor calidad hasta el momento. Hay varias maneras de implementar un paseo aleatorio, dependiendo de cómo uno recorre el espacio. Una de ellas es discretizar el espacio (por ejemplo, con una cuadrícula), y nos movemos de un punto a alguno de sus vecinos con cierta probabilidad.\n",
+       "\n",
+       "En el siguiente ejemplo, dado un punto inicial $(x,y)$ se considera como el vecindario de ese punto a $N(x,y)=\\{(x+h,y),(x−h,y),(x,y+h),(x,y−h)\\}$ y cada uno tiene probabilidad de $1/4$ de ser elegido como próximo paso.\n",
+       "\n",
+       "Otra manera es, en cada paso, avanzar en una dirección aleatoria extraída a partir de alguna distribución, por ejemplo  $N(0,σ^2)$ con un valor de $σ$ adecuado. Esto puede ahorrarnos tener que discretizar el espacio si estamos trabajando con problemas en variables continuas.\n",
+       "\n",
+       "Así, por ejemplo, si el punto actual es $(x,y)$ el próximo punto será $(x+α,y+β)$, dónde $α$ y $β$ provienen de una distribución $N(0,0.1^2)$."
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "#### Idea\n",
+       "\n",
+       "```math\n",
+       "mejor_s  ← punto al azar\n",
+       "REPETIR\n",
+       "     s  ← punto al azar cercano a s\n",
+       "     si calidad(s) ≥ calidad(mejor_s):\n",
+       "         mejor_s  ← s\n",
+       "DEVOLVER mejor_s\n",
+       "```"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "#### Ejemplo\n",
+       "\n",
+       "Tomemos la siguiente función\n",
+       "\n",
+       "$$f(x, y) = 2(e^{-x^2-y^2}- e^{-(x-1)^2 - (y-1)^2})$$\n",
+       "\n",
+       "y comparemos descenso de gradiente y paseo aleatorio en las dos variantes descriptas."
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": 14,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "using LinearAlgebra, Plots, Distributions"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "f(x,y)=2*(exp(-x^2-y^2)-exp(-(x-1)^2-(y-1)^2))\n",
+       "f(v)=f(v[1],v[2])"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "x=-2.5:0.01:2.5\n",
+       "y=x\n",
+       "surface(x,y,f)\n"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "contour(x,y,f)"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function armijo(ϕ,m;ε=0.5,η=1.1)\n",
+       "\ta = ϕ(0)\n",
+       "\ttop(s) = a+ε*m*s\n",
+       "\tt = 0.1\n",
+       "\twhile ϕ(t)<top(t)\n",
+       "\t\tt = η*t\n",
+       "\tend\n",
+       "\twhile ϕ(t)>top(t)\n",
+       "\t\tt = t/η\n",
+       "\tend\n",
+       "\treturn t\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function gradient(f,x;h=1e-10) \n",
+       "\tn  = length(x)\n",
+       "\tz  = zeros(n)\n",
+       "\tfor i ∈ eachindex(z)\n",
+       "\t\te    = zeros(n)\n",
+       "\t\te[i] = 1\n",
+       "\t\tz[i] = (f(x .+ h*e) - f(x .- h*e))/(2h)\n",
+       "\tend\n",
+       "\tz\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function descenso_grad(f,x₀;ε=1e-8,Nₘₐₓ=1000)\n",
+       "\tk=0\n",
+       "\tsol=[]\n",
+       "\twhile norm(gradient(f,x₀))>ε && k<Nₘₐₓ\n",
+       "\t\td=-gradient(f,x₀)\n",
+       "\t\tt=armijo(α->f(x₀+α*d),-norm(d)^2)\n",
+       "\t\tx₁=x₀+t*d\n",
+       "\t\tx₀=x₁\n",
+       "\t\tpush!(sol,x₀)\n",
+       "\t\tk += 1\n",
+       "\tend\n",
+       "\tcosto = k\n",
+       "\treturn x₀,sol,costo\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "Probemos este algoritmo usando por ejemplo $x_0=(0,1)$ y $x_0=(-1,-1)$"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "x_min,sol,costo=descenso_grad(f,[0,1])"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "Ahora implementamos paseo aleatorio en las dos versiones mencionadas anteriormente."
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function vecino_discreto(x;h=0.01)\n",
+       "\ta=rand(1)[1]\n",
+       "\tif a<0.25\n",
+       "\t\treturn [x[1]+h,x[2]]\n",
+       "\telseif 0.25<=a<0.5\n",
+       "\t\treturn [x[1]-h,x[2]]\n",
+       "\telseif 0.5<=a<0.75\n",
+       "\t\treturn [x[1],x[2]+h]\n",
+       "\telse\n",
+       "\t\treturn return [x[1],x[2]-h]\n",
+       "\tend\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function vecino_continuo(x)\n",
+       "    d = Normal(0.0,0.1^2)\n",
+       "    α=rand(d,1)[1]\n",
+       "    β=rand(d,1)[1]\n",
+       "    return [x[1]+α,x[2]+β]\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "[-2,2]"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function paseo_aleatorio_discreto(f;Nmax=10000)\n",
+       "\tmejor_s = rand(2)\n",
+       "\tk=0\n",
+       "\tcamino = [mejor_s]\n",
+       "\twhile k<Nmax\n",
+       "\t\ts = vecino_discreto(mejor_s)\n",
+       "\t\tif f(s)<f(mejor_s)\n",
+       "\t\t\tpush!(camino,s)\n",
+       "\t\t\tmejor_s = s\n",
+       "\t\tend\n",
+       "\t\tk=k+1\n",
+       "\tend\n",
+       "\treturn mejor_s,camino\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "min1,camino1=paseo_aleatorio_discreto(f)"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "function paseo_aleatorio_continuo(f;Nmax=10000)\n",
+       "\tmejor_s = rand(2)\n",
+       "\tk=0\n",
+       "\tcamino = [mejor_s]\n",
+       "\twhile k<Nmax\n",
+       "\t\ts = vecino_continuo(mejor_s)\n",
+       "\t\tif f(s)<f(mejor_s)\n",
+       "\t\t\tpush!(camino,s)\n",
+       "\t\t\tmejor_s = s\n",
+       "\t\tend\n",
+       "\t\tk=k+1\n",
+       "\tend\n",
+       "\treturn mejor_s,camino\n",
+       "end"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "min2,camino2=paseo_aleatorio_continuo(f)"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "En ambos casos, los paseos aleatorios permitieron hallar soluciones casi óptimas. Sin embargo, esto se debe completamente a la aleatoriedad. Es muy poco probable que puedan obtenerse el mismo camino o incluso el mismo resultado si se vuelve a correr el algoritmo.\n",
+       "\n",
+       "Observar que en ningún momento requerimos alguna característica de  $f$: ni derivabilidad ni continuidad. Por esta razón, el camino aleatorio es aplicable a casi cualquier función y es muy rápido en cuanto a tiempo de ejecución.\n",
+       "\n"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "X=hcat(sol...)'\n",
+       "C1 = hcat(camino1...)'\n",
+       "C2 = hcat(camino2...)'"
+      ]
+     },
+     {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+       "contour(x,y,f)\n",
+       "plot!(X[:,1],X[:,2],seriestype=:scatter)\n",
+       "plot!(C1[:,1],C1[:,2],seriestype=:scatter,legend=false)\n",
+       "plot!(C2[:,1],C2[:,2],seriestype=:scatter,legend=false)\n"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "### Recocido Simulado \n",
+       "\n",
+       "Es un método de optimización global y está motivado por la técnica del recocido del acero utilizada en la herrería: el acero es calentado a altas temperaturas para que sea maleable y su posterior enfriamiento es controlado para mejorar su fuerza y durabilidad.\n",
+       "\n",
+       "En este método, si un vecino mejora el valor de la función objetivo, es aceptado siempre. Sin embargo, también existe la probabilidad de aceptar a un vecino que empeore el valor de la función objetivo. Generalmente, la probabilidad de aceptación para problemas de minimización se define como:\n",
+       "\n",
+       "$$p(s, s') = exp\\left(\\dfrac{f(s)-f(s')}{T}\\right)$$\n",
+       "\n",
+       "donde  $T$ es la temperatura actual, $s$ es el punto actual y  $s'$ un vecino con peor valor de la función objetivo. La idea es tomar un número $r$ un número al azar con distribución $U[0,1]$ y aceptar a $s'$ si $r<p(s,s')$\n",
+       "\n",
+       "Observar que si $T$ es grande, $p\\approx 1$, entonces se parece a un paseo aleatorio, ya que hay alta probabilidad de permitir pasos que empeoren la función objetivo. En cambio, si $T\\to 0$, $p\\approx 0$ y se asemeja a lo que se conoce como Hill-Climbing. La idea es comenzar con un $T$ grande e ir disminuyéndolo luego de un número de iteraciones. $T$ simboliza la temperatura en el proceso de recocido, por lo que no hay que hacerla bajar ni muy rápido, ni muy lento.\n",
+       "\n",
+       "*Algoritmo Hill-Climbing:* Es uno de los métodos mas básicos de búsqueda local: consiste en recorrer los vecinos de un punto hasta encontrar alguno que mejore el valor de la función objetivo. Se puede establecer un orden para recorrer el vecindario de un punto o se lo puede hacer de manera aleatoria. Recorrer los vecinos ordenadamente da lugar al Simple Hill Climbing, mientras que hacerlo de forma aleatoria da lugar al Stochastic Hill Climbing. Es un algoritmo greedy: toma automáticamente el primer vecino que mejore la función objetivo, sin considerar movimientos futuros o al resto del vecindario que quedó sin recorrer."
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "**Idea (para minimización)**\n",
+       "\n",
+       "```math\n",
+       "T  ← Temperatura inicial\n",
+       "s ← Punto inicial\n",
+       "mejor_s ← s\n",
+       "REPETIR hasta que T < T_min:\n",
+       "       t  ← vecino de s\n",
+       "       Disminuir T (por ejemplo, T = a*T con a<1)\n",
+       "       si calidad(t) > calidad(s):\n",
+       "           s  ← t\n",
+       "           si calidad(s)  ≤ calidad(mejor_s):\n",
+       "               mejor_s  ← s\n",
+       "       de lo contrario, si  exp(f(s)−f(t)T)>rand():\n",
+       "           s  ← t\n",
+       "DEVOLVER mejor_s\n",
+       "```"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "Donde *rand()* es un número generado al azar con distribución $U[0,1]$.\n",
+       "\n",
+       "La dificultad de este método es establecer cuál es la temperatura inicial y la tasa de enfriamiento ($a$). Generalmente, tomar $a=0.8$ da buenos resultados. Muchas veces, estos parámetros se fijan a partir de experimentaciones. De nuevo, si $a\\approx 1$ el recorrido no es eficiente y si $a\\approx 0$ el método se asemeja demasiado al Hill Climbing.\n",
+       "\n",
+       "\n",
+       "\n"
+      ]
+     },
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+       "**Ejercicio:** Repetir el ejemplo anterior usando Recocido Simulado. Tomar $T_0=25000$ y $a=0.95$."
+      ]
+     }
+    ],
+    "metadata": {
+     "kernelspec": {
+      "display_name": "Julia 1.10.4",
+      "language": "julia",
+      "name": "julia-1.10"
+     },
+     "language_info": {
+      "file_extension": ".jl",
+      "mimetype": "application/julia",
+      "name": "julia",
+      "version": "1.10.4"
+     }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 2
+   }
+   
