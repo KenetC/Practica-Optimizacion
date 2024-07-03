@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.41
+# v0.19.40
 
 using Markdown
 using InteractiveUtils
@@ -38,7 +38,36 @@ while norm(∇f(xₖ))>ε
 """
 
 # ╔═╡ c1e2dada-5fe9-46e9-86e0-b475c7578c41
-#completar
+function conjugate_gradient(A,b,c;x0=0,ϵ=0.001,N=100)
+	if x0 == 0 
+		r0 = b 
+		x0 = zeros(size(A,1))
+	else 
+		r0 = b - A*x0
+	end
+	if norm(r0) < ϵ 
+		return x0
+	end 
+	p0 = r0 ;x1 = x0; r1 = r0; p1 = p0 
+	k = 0 
+	parar = false 
+	xs = [x0]
+	while k < N && !parar 
+		x0 = x1; r0 = r1; p0 = p1 
+		α = r0'*r0 / (r0'*A*r0)
+		x1 = x0 + α*p0
+		r1 = r0 - α*A*p0
+		push!(xs,x1)
+		if norm(r1) < ϵ 
+			parar = true 
+			break
+		end
+		β = r1'*r1 / (r0'*r0)
+		p1 = r1 + β*p0
+		k += 1
+	end 
+	return x1,xs 
+end
 
 # ╔═╡ 9102e67b-61a6-4056-8285-936201dace9a
 md"""
@@ -60,7 +89,7 @@ begin
 end
 
 # ╔═╡ cde1ab8a-d062-4479-94c2-b4640e676806
-sol_ex=A\b
+sol_ex = A\b
 
 # ╔═╡ cff42c01-dc1b-4409-9c4c-56db580fc0fd
 md"""
@@ -70,22 +99,19 @@ md"""
 
 # ╔═╡ 25f122ab-fed8-4d24-9b48-56ca5f15ca87
 begin
-	v=zeros(size(res,1))
+	x1, res = conjugate_gradient(A,b,0)
+	v = zeros(size(res,1))
 	for i in 1:size(v,1)
-		v[i]=(res[i,:]-sol_ex)'*A*(res[i,:]-sol_ex)
+		v[i]=(res[i]-sol_ex)'*A*(res[i]-sol_ex)
 	end
 	plot(log.(v))
 end
-	
 
 # ╔═╡ 5199b970-4b02-440a-a698-77eef06951d9
 md"""
 !!! note "Ejercicio (Bonus)"
 	Implementar método de tangentes paralelas. Comparar con gradiente conjugado.
 """
-
-# ╔═╡ 3771f547-7fa1-4f44-892b-d50336a3c317
-#completar
 
 # ╔═╡ 32300cb2-3e86-406b-a47b-beedcf4ff26b
 md"""
@@ -104,6 +130,62 @@ $$\beta^{FR}_k = \dfrac{\nabla f(x^{k+1})^T \nabla f(x^{k+1})}{\nabla f(x^{k})^T
 
 Gradientes Conjugados para funciones no cuadráticas no necesariamente terminan en  $n$ pasos. Una práctica que da buenos resultados es reiniciar el  $β_k$ cada  $n$ iteraciones.
 """
+
+# ╔═╡ 763673f3-902d-4615-9ab7-5b1437cca412
+function armijo(ϕ,m;ε=0.5,η=1.1)::Float64
+	l(α) = ϕ(0) + ε*m*α
+	t=0.1
+	while ϕ(t)<l(t)
+		t *= η
+	end
+	while ϕ(t)>l(t)
+		t /= η
+	end
+	return t
+end
+
+# ╔═╡ e36687a4-6bd2-49e0-97cc-abbf69a5dd5a
+
+
+# ╔═╡ c2717b38-4952-4117-ae56-321a54188ed1
+# vamos a suponer que no pasan el gradiente como parametro, n dim input
+function conjugate_gradient(f::Function,n;x0=0,ϵ=0.001,N=100)
+	if x0 == 0 
+		r0 = b 
+		x0 = zeros(n)
+	else 
+		r0 = b - A*x0
+	end
+	if norm(r0) < ϵ 
+		return x0
+	end 
+	p0 = r0 ;x1 = x0; r1 = r0; p1 = p0 
+	k = 0 
+	parar = false 
+	xs = [x0]
+	x = [Symbol("x$i") for i in 1:n]
+	@variables x[1:n]
+	#g(x...) = f([x...]) # va depender como tengamos definida la funcion 
+	grad = Symbolics.gradient(f(x...), [x...])
+	while k < N && !parar 
+		x0 = x1; r0 = r1; p0 = p1 
+		α = ARMIJO O METODOS LINEALES.. 
+		x1 = x0 + α*p0
+		r1 = r0 - α*A*p0
+		push!(xs,x1)
+		if norm(r1) < ϵ 
+			parar = true 
+			break
+		end
+		#β = r1'*r1 / (r0'*r0)
+		∇fx0 = substitute(grad,Dict(x=>x0))
+		∇fx1 = substitute(grad,Dict(x=>x1))
+		β = (∇fx0' * ∇fx0)/(∇fx1'*∇fx1)
+		p1 = r1 + β*p0
+		k += 1
+	end 
+	return x1,xs 
+end
 
 # ╔═╡ d884191c-d967-4b25-a137-9f99188b6f02
 md"""
@@ -1231,9 +1313,11 @@ version = "1.4.1+1"
 # ╟─cff42c01-dc1b-4409-9c4c-56db580fc0fd
 # ╠═25f122ab-fed8-4d24-9b48-56ca5f15ca87
 # ╟─5199b970-4b02-440a-a698-77eef06951d9
-# ╠═3771f547-7fa1-4f44-892b-d50336a3c317
 # ╟─32300cb2-3e86-406b-a47b-beedcf4ff26b
 # ╟─0371faaa-244e-457c-9158-cb9d2e4c71cf
+# ╠═763673f3-902d-4615-9ab7-5b1437cca412
+# ╠═e36687a4-6bd2-49e0-97cc-abbf69a5dd5a
+# ╠═c2717b38-4952-4117-ae56-321a54188ed1
 # ╟─d884191c-d967-4b25-a137-9f99188b6f02
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
