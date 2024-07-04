@@ -22,7 +22,7 @@ function wolfe(ϕ,m;c1=0.5,c2=0.75,ε=0.5,η=1.1,h=1e-8)
 end
 
 function goldstein(ϕ,m;β=0.55,η=1.01,h=1e-8)
-    dϕ(x)=(ϕ(x+h)-ϕ(x-h))/h
+	dϕ(x)=(ϕ(x+h)-ϕ(x-h))/h
 	t = 0.1
 	while β*m > dϕ(t)
 		t *= η
