@@ -6,8 +6,7 @@ using InteractiveUtils
 
 # ╔═╡ ab014580-e0dc-11ec-3aad-efd3b4454988
 begin
-	using LinearAlgebra
-	using Plots
+	using LinearAlgebra,Plots
 end
 
 # ╔═╡ 475db026-38b0-4ceb-ac0f-3bdc2ac21552
@@ -47,7 +46,39 @@ md"""
 	Probar el algoritmo con una función simple (e.g.: $f(t) = t^2-t$)."""
 
 # ╔═╡ d8149c87-4cea-4d78-b93c-f1d9da784fe7
-#completar
+# Como esta en el enunciado suponemos que a==0, 
+function razon_dor(ϕ::Function;b=0.25,ϵ=1e-5,η=1.3)
+	# Busqueda de "b": 
+	phi0 = ϕ(0)
+	while ϕ(b) <= phi0
+		b *= η  
+	end
+	# Busqueda razon dorada 
+	θ=(sqrt(5)-1)/2
+	a_0=0
+	b_0=b
+	b_1=a_0+θ*(b_0-a_0)
+	a_1=b_0-θ*(b_0-a_0)
+	ϕ_a=ϕ(a_1)
+	ϕ_b=ϕ(b_1)
+	while b_0 - a_0 > ε
+		if ϕ_a ≤ ϕ_b
+			b_0=b_1
+			b_1=a_1
+			ϕ_b=ϕ_a
+			a_1=b_0-θ*(b_0-a_0)
+			ϕ_a=ϕ(a_1)
+		else
+			a_0=a_1
+			a_1=b_1
+			ϕ_a=ϕ_b
+			b_1=a_0+θ*(b_0-a_0)
+			ϕ_b=ϕ(b_1)
+		end
+	end
+	x = (a_0+b_0)/2
+	return x
+end
 
 # ╔═╡ 5ce2c97c-240c-4644-95ac-7c5c38ab3ef0
 md"""
@@ -58,7 +89,29 @@ md"""
 
 
 # ╔═╡ 7927a4cd-95a3-4c76-9392-2f2c7bf5a028
-#completar
+function DFP(f::Function,g::Function,x0;tol=0.001,N=100)
+	n = size(x0)
+	gx0 = g(x0)
+	d0 = -gx0
+	iters = 0 #xs = [x0]
+	x1 = x0; d1 = d0
+	while iters < N && norm(d0) > tol
+		k = 0 
+		S0 = I(n)
+		while k < n && norm(d0) > tol
+			α = armijo(t->f(x0+t*d0),gx0'*d0)
+			x1 = x0 + α*S0*d0
+			gx1 = g(x1)
+			δ = x1 - x0 ; q = gx1 - gx0
+			S1 = S0 + δ*δ'/(δ'*q) - S0*q*q'*S0/(q'*S*q)
+			d1 = -gx1
+			x0 = x1; d0 = d1; gx0 = gx1
+			k += 1
+		end
+		iters += 1
+	end
+	return x1
+end
 
 # ╔═╡ f04db0a1-86f5-4efb-a4bd-696e0627dab3
 md"""Nuestro primer método de resolución será el de penalidad. Dado que nuestro problema contempla sólo restricciones de desigualdad, podemos limitar el programa a ese caso. Por lo tanto: 
@@ -72,14 +125,8 @@ md"""Nuestro primer método de resolución será el de penalidad. Dado que nuest
 
 
 
-# ╔═╡ 3225fe20-d414-45b6-b870-84d4d65942ee
-maxz(x) = max(x,0)
-
 # ╔═╡ 582aed2f-5daa-48f8-8a0d-bfa2d8dcb65a
 md"""para facilitar la implementación del término de penalidad. Aplicando: `maxz.(g(z))` obtenemos un vector en donde cada casillero es $0$ o $g_j(x)$, según corresponda."""
-
-# ╔═╡ 4add1b6c-6866-41fd-8c1b-086fc781aa2c
-#penalidad
 
 # ╔═╡ dcb8703a-9847-4766-8326-2b7e13ead843
 md"""Compararemos los resultados arrojados por el método de penalidad con el método del Lagrangiado aumentado que es, en cierto sentido, una sofisticación del enfoque de penalidad.
@@ -105,7 +152,16 @@ $z = [x;y;r].$
 """
 
 # ╔═╡ 5ebc67a4-4543-4823-a4f8-bcd75cbdd3e2
-#completar
+# Pre: z -> x1,y1 x2,y2 ... r
+function desempaquetar(z)
+	n = Int((length(z)-1)/2)
+	r = z[end]
+	x = zeros(n) ; y = zeros(n)
+	for i in 1:n
+		x[i] = z[2*i-1]; y[i] = z[2*i]
+	end
+	return x,y,r
+end
 
 # ╔═╡ 321ea2f9-e4b4-431d-b0e1-3659c83f652c
 md"""
@@ -157,10 +213,40 @@ md"""
 	El funcional a optimizar será el área **no** ocupada por cír culos. Implementar este funcional y gradiente, en términos de la variable $z$."""
 
 # ╔═╡ 3171d4dc-edd3-4b26-9adc-49fb896f5c3b
-#completar
+function f(z)
+	r = z[end]
+	return 1-π*r^2
+end
+
+# ╔═╡ 3225fe20-d414-45b6-b870-84d4d65942ee
+begin 
+	maxz(x) = max(x,0)
+	P(G,x) = sum((maxz.(G(x))).^2) / 2 
+	penalized_function(x,c) = f(x) + c*P(G,x)
+end
+
+# ╔═╡ 4add1b6c-6866-41fd-8c1b-086fc781aa2c
+function Penalidad(f,df,g,dg,z0)
+	c0 = 1.0; c_factor =10.0; tol = 1e-6; kMAX=100
+	iter = 0
+	while norm(x0-x1) < tol && iter < kMAX
+		Q(x,c0) = penalized_function(x,c)
+		dQ(x,c0) = df(x) + c * maxz.(dg(x))
+		z1 = DFP(Q,dQ,z0)
+		if !(false in unique(g(x1).<0)) # ver que esta dentro del conjunto factible 
+			break 
+		else 
+			c0   *= c_factor
+			iter += 1
+		end
+	end
+end
 
 # ╔═╡ 068222ed-3c32-44a0-af7a-bc7caae264a9
-#completar
+function df(z) 
+	r = z[end] 
+	return [0,0,2*π*r]
+end
 
 # ╔═╡ cba62975-6abe-4f6a-b153-ec98dcaf3ae5
 md"""Las restricciones al problema pueden escribirse del siguiente modo:
@@ -207,13 +293,69 @@ function g(z)
 	return res
 end
 
+# ╔═╡ 1a2c17b3-2f2b-43fc-859d-945b03a452df
+begin 
+	z = [0.25,0.25,0.25,0.75,0.75,0.25,0.1]
+	#unique(g(z) .< 0)[1] == true
+	!(false in unique([true,false,false]))
+end
+
 # ╔═╡ ae1daad8-5e0d-4784-9e18-5e34ebab5998
 md"""
 !!! note "Ejercicio 7"
 	Dado que queremos aplicar el algoritmo DFP conociendo el gradiente de la función de penalidad o del Lagrangiano aumentado, necesitaremos también el gradiente de las restricciones. Recordar que la convención más práctica es considerar que $∇g$ es una matriz de $N\times M$ en donde la columna $i$-ésima  corresponde al gradiente de $g_i$. Sobre la base de la función $g$, implementar una función que reciba $z$ y devuelva esta matriz, evaluada en $z$."""
 
 # ╔═╡ 1ac6a298-963d-41d3-91aa-1c59b0c2f2e0
-#completar
+function dg(z)
+	x,y,r = desempaquetar(z) ; n = length(x)
+	res = zeros(Int(2*n+1),Int(n*(n-1)/2+4n+1))
+	k = 1
+	res[end,1:n(n-1)/2] .= 8r
+	for i in 1:n
+		for j in i+1:n
+			cont = 0
+			for h in 1:2n
+				if h <= n && cont < 4 # -> x
+					if h == i # -> xi
+						res[h,k] = -2(x[i]-x[j]); cont +=1
+					elseif h == j # -> xj
+						res[h,k] = 2(x[i]-x[j]); cont +=1
+					end
+				elseif cont < 4 # -> y
+					if h % n == i # -> yi
+						res[h,k] = -2(y[i]-y[j]); cont +=1
+					elseif h % n == j # -> yj
+						res[h,k] = 2(y[i]-y[j]); cont +=1
+					end
+				else 
+					break				
+				end
+			end
+			k += 1
+		end
+	end
+	for i in 1:n
+		res[end,k] = 1
+		res[end,k+1] = 1
+		res[end,k+2] = 1
+		res[end,k+3] = 1
+		cont = 0
+		for h in 1:2n
+			if h <= n && cont < 4 && h==i# -> xi
+				res[h,k] = 1; cont +=1
+				res[h,k+2] = -1; cont +=1
+			elseif h % n == i && cont < 4 # -> y
+				res[h,k+1] = 1 ; cont +=1
+				res[h,k+3] = -1 ; cont +=1
+			else 
+				break				
+			end
+		end
+		k += 4
+	end
+	res[end,end] = -1
+	return res
+end 
 
 # ╔═╡ 2b10fbba-8d1a-46e7-b3d0-e68e48996084
 md"""### Resolución
@@ -238,7 +380,14 @@ Para resolver el problema con radios variables es necesario implementar nuevas v
 	Implementar nuevamente la función desempaquetar, dado que ahora $r\in\mathbb{R}^n$."""
 
 # ╔═╡ 33353538-8bd5-4b34-a89c-96aeac145fff
-#completar
+function desempaquetar_dist(z)
+	n = Int(length(z)/3)
+	x = zeros(n); y = zeros(n); r = zeros(n)
+	for i in 1:n
+		x[i] = z[i]; y[i] = z[n+i]; r = z[2n+i]
+	end
+	return x,y,r 
+end
 
 # ╔═╡ abdb4f85-fcb0-4881-97ae-ec024c22e4f9
 md"""
@@ -262,11 +411,104 @@ md"""
 
 
 
+# ╔═╡ 46774a64-2066-4b53-bc9b-812764d73476
+md"""Las restricciones al problema con radios variables:
+
+$(r_i + r_j)^2 - (x_i-x_j)^2 - (y_i-y_j)^2 \le 0,\quad\quad  1\le i\le n,\, i<j\le n.$
+
+$\left\{\begin{array}{rcl} x_i + r_i - 1 &\le& 0,\\
+ 					       y_i + r_i - 1 &\le& 0,\\
+ 						       r_i - x_i &\le& 0,\\
+ 						    r_i - y_i &\le& 0,\\
+							-r_i &\le& 0
+        \end{array}\right.  \quad\quad 1\le i\le n.$
+
+Ahora tenemos 
+
+$M = \frac{n(n-1)}{2}+5n$
+
+restricciones. 
+"""
+
 # ╔═╡ be7b9372-f007-4035-8ce6-6baed88ee5de
-#completar
+function g2(z)
+	x,y,r = desempaquetar_dist(z)
+	n     = length(x)
+	res   = zeros(Int(n(n-1)/2+5n))
+	k     = 1
+	for i in 1:n
+		for j in i+1:n
+			res[k] = -(x[i]-x[j])^2-(y[i]-y[j])^2+(r[i]+r[j])^2
+			k     += 1
+		end
+	end
+	for i in 1:n
+		res[k]   = x[i]+r[i]-1
+		res[k+1] = y[i]+r[i]-1
+		res[k+2] = r[i]-x[i]
+		res[k+3] = r[i]-y[i]
+		res[k+4] = -r[i]
+		k       +=5
+	end
+	return res
+end
 
 # ╔═╡ 381ff285-04c3-41b9-9e4f-cb2f1613d4c7
-#completar
+function dg2(z)
+	x,y,r = desempaquetar_dist(z) ; n = length(x)
+	res = zeros(Int(3n),Int(n(n-1)/2+5n))
+	k = 1
+	for i in 1:n
+		for j in i+1:n
+			cont = 0
+			for h in 1:3n
+				if h <= n && cont < 6 # -> x
+					if h == i # -> xi
+						res[h,k] = -2(x[i]-x[j]); cont +=1
+					elseif h == j # -> xj
+						res[h,k] = 2(x[i]-x[j]); cont +=1
+					end
+				elseif n < h <= 2n && cont < 6 # -> y
+					if h % n == i # -> yi
+						res[h,k] = -2(y[i]-y[j]); cont +=1
+					elseif h % n == j # -> yj
+						res[h,k] = 2(y[i]-y[j]); cont +=1
+					end
+				elseif cont < 6
+					if h % n == i # -> ri
+						res[h,k] = 2(r[i]+r[j]); cont +=1
+					elseif h % n == j # -> rj
+						res[h,k] = 2(r[i]+r[j]); cont +=1
+					end
+				else 
+					break 
+				end
+			end
+			k += 1
+		end
+	end
+	for i in 1:n
+		res[2n + i,k] = 1
+		res[2n + i,k+1] = 1
+		res[2n + i,k+2] = 1
+		res[2n + i,k+3] = 1
+		res[2n + i,k+4] = -1
+		cont = 0
+		for h in 1:2n
+			if h <= n && cont < 4 && h==i # -> xi
+				res[h,k] = 1; cont +=1
+				res[h,k+2] = -1; cont +=1
+			elseif h % n == i && cont < 4 # -> yi
+				res[h,k+1] = 1 ; cont +=1
+				res[h,k+3] = -1 ; cont +=1
+			else
+				break				
+			end
+		end
+		k += 5
+	end
+	return res
+end
 
 # ╔═╡ 38bf24ea-b276-4725-81e6-77cc2a740847
 md"""Para completar, damos aquí la función para graficar y la función para generar el dato inicial."""
@@ -331,7 +573,7 @@ Plots = "~1.40.4"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.1"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "196229aacd17a11d961cc140b4e87a3e11a88bed"
 
@@ -411,7 +653,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.1.0+0"
+version = "1.1.1+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -1406,6 +1648,7 @@ version = "1.4.1+1"
 # ╠═068222ed-3c32-44a0-af7a-bc7caae264a9
 # ╟─cba62975-6abe-4f6a-b153-ec98dcaf3ae5
 # ╠═241c09ec-8910-4213-aae4-bffe5768de6e
+# ╠═1a2c17b3-2f2b-43fc-859d-945b03a452df
 # ╟─ae1daad8-5e0d-4784-9e18-5e34ebab5998
 # ╠═1ac6a298-963d-41d3-91aa-1c59b0c2f2e0
 # ╟─2b10fbba-8d1a-46e7-b3d0-e68e48996084
@@ -1416,6 +1659,7 @@ version = "1.4.1+1"
 # ╠═548850dd-e261-41da-bff5-b5f532d28333
 # ╠═2f869f4c-79ab-472d-8704-972faf00fa18
 # ╟─c03d60bc-8db0-4392-8b0e-07f6529b3943
+# ╟─46774a64-2066-4b53-bc9b-812764d73476
 # ╠═be7b9372-f007-4035-8ce6-6baed88ee5de
 # ╠═381ff285-04c3-41b9-9e4f-cb2f1613d4c7
 # ╟─38bf24ea-b276-4725-81e6-77cc2a740847
