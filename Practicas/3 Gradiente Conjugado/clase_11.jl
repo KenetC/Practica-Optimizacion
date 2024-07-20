@@ -223,7 +223,7 @@ end
 begin
 # Parámetros
 n = 3        # Número de círculos
-r = 0.1      # Radio de los círculos
+r = 0.2     # Radio de los círculos
 L = 1.0      # Tamaño del lado del cuadrado
 
 # Función para generar puntos iniciales en una cuadrícula
@@ -258,7 +258,74 @@ plot!([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], linewidth=2, linecolor=:black)  # Cuadra
 end
 
 # ╔═╡ 97be179f-5500-42de-980e-2d9c606a4572
-initial_points
+begin 
+	# Como esta en el enunciado suponemos que a==0, 
+	function razon_dor(ϕ::Function;b=0.25,ε=1e-5,η=1.3)
+	# Busqueda de "b": 
+	phi0 = ϕ(0)
+	while ϕ(b) <= phi0
+		b *= η  
+	end
+	# Busqueda razon dorada 
+	θ=(sqrt(5)-1)/2
+	a_0=0
+	b_0=b
+	b_1=a_0+θ*(b_0-a_0)
+	a_1=b_0-θ*(b_0-a_0)
+	ϕ_a=ϕ(a_1)
+	ϕ_b=ϕ(b_1)
+	while b_0 - a_0 > ε
+		if ϕ_a ≤ ϕ_b
+			b_0=b_1
+			b_1=a_1
+			ϕ_b=ϕ_a
+			a_1=b_0-θ*(b_0-a_0)
+			ϕ_a=ϕ(a_1)
+		else
+			a_0=a_1
+			a_1=b_1
+			ϕ_a=ϕ_b
+			b_1=a_0+θ*(b_0-a_0)
+			ϕ_b=ϕ(b_1)
+		end
+	end
+	x = (a_0+b_0)/2
+	return x
+	end
+	function DFP(f::Function,g::Function,x0;tol=0.001,N=100)
+	n = length(x0)
+	gx0 = g(x0)
+	d0 = -gx0
+	iters = 0 #xs = [x0]
+	x1 = x0; d1 = d0
+	while iters < N && norm(d0) > tol
+		k = 0 
+		S0 = I(n)
+		while k < n && norm(d0) > tol
+			α = razon_dor(t->f(x0+t*d0))
+			x1 = x0 + α*S0*d0
+			gx1 = g(x1)
+			δ = x1 - x0 ; q = gx1 - gx0
+			S1 = S0 + δ*δ'/(δ'*q) - S0*q*q'*S0/(q'*S0*q)
+			d1 = -gx1
+			x0 = x1; d0 = d1; gx0 = gx1
+			k += 1
+		end
+		iters += 1
+	end
+	return x1
+end
+end
+
+# ╔═╡ 5ca133e9-6e5d-4f37-afdd-1ebb5645cdaa
+begin 
+	F(x) = (x[1]-1)^2+(x[2]-2)^2
+	g(x) = [2(x[1]-1),2(x[2]-2)]
+	DFP(F,g,[1,4])
+end
+
+# ╔═╡ da72f7f0-4fe2-4cd2-a56a-7189b6510bfd
+ones(2).^2
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1936,5 +2003,7 @@ version = "1.4.1+1"
 # ╠═c8031c3f-a774-41bb-90f0-208900b02c85
 # ╠═83ffab3d-e5e0-4ab9-88c8-d93138258e5f
 # ╠═97be179f-5500-42de-980e-2d9c606a4572
+# ╠═5ca133e9-6e5d-4f37-afdd-1ebb5645cdaa
+# ╠═da72f7f0-4fe2-4cd2-a56a-7189b6510bfd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

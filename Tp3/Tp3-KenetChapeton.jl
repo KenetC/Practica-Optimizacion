@@ -6,7 +6,7 @@ using InteractiveUtils
 
 # ╔═╡ ab014580-e0dc-11ec-3aad-efd3b4454988
 begin
-	using LinearAlgebra,Plots
+	using LinearAlgebra,Plots,Random
 end
 
 # ╔═╡ 475db026-38b0-4ceb-ac0f-3bdc2ac21552
@@ -46,8 +46,7 @@ md"""
 	Probar el algoritmo con una función simple (e.g.: $f(t) = t^2-t$)."""
 
 # ╔═╡ d8149c87-4cea-4d78-b93c-f1d9da784fe7
-# Como esta en el enunciado suponemos que a==0, 
-function razon_dor(ϕ::Function;b=0.25,ϵ=1e-5,η=1.3)
+function razon_dor(ϕ::Function;b=0.01,ε=1e-8,η=1.1)
 	# Busqueda de "b": 
 	phi0 = ϕ(0)
 	while ϕ(b) <= phi0
@@ -89,25 +88,24 @@ md"""
 
 
 # ╔═╡ 7927a4cd-95a3-4c76-9392-2f2c7bf5a028
-function DFP(f::Function,g::Function,x0;tol=0.001,N=100)
-	n = size(x0)
-	gx0 = g(x0)
-	d0 = -gx0
-	iters = 0 #xs = [x0]
-	x1 = x0; d1 = d0
+function DFP(f::Function,df::Function,x0;tol=1e-8,N=100)
+	n = length(x0)
+	dfx0 = df(x0)
+	d0 = -dfx0
+	iters = 0 
+	x1 = x0; d1 = d0; S = I(n)
 	while iters < N && norm(d0) > tol
-		k = 0 
-		S0 = I(n)
-		while k < n && norm(d0) > tol
-			α = armijo(t->f(x0+t*d0),gx0'*d0)
-			x1 = x0 + α*S0*d0
-			gx1 = g(x1)
-			δ = x1 - x0 ; q = gx1 - gx0
-			S1 = S0 + δ*δ'/(δ'*q) - S0*q*q'*S0/(q'*S*q)
-			d1 = -gx1
-			x0 = x1; d0 = d1; gx0 = gx1
-			k += 1
-		end
+		#k = 0 
+		#while k < n && norm(d0) > tol
+		t = razon_dor(t->f(x0+t*S*d0))
+		x1 = x0 + t*S*d0
+		dfx1 = df(x1)
+		δ = x1 - x0 ; q = dfx1 - dfx0
+		S += δ*δ'/(δ'*q) - S*q*q'*S/(q'*S*q)
+		d1 = -dfx1
+		x0 = x1; d0 = d1; dfx0 = dfx1
+		#k += 1
+		#end
 		iters += 1
 	end
 	return x1
@@ -125,8 +123,33 @@ md"""Nuestro primer método de resolución será el de penalidad. Dado que nuest
 
 
 
+# ╔═╡ 3225fe20-d414-45b6-b870-84d4d65942ee
+begin
+	maxz(x) = max(x,0)
+	P(G::Function,x) = sum((maxz.(G(x))).^2) / 2 
+end
+
 # ╔═╡ 582aed2f-5daa-48f8-8a0d-bfa2d8dcb65a
 md"""para facilitar la implementación del término de penalidad. Aplicando: `maxz.(g(z))` obtenemos un vector en donde cada casillero es $0$ o $g_j(x)$, según corresponda."""
+
+# ╔═╡ 4add1b6c-6866-41fd-8c1b-086fc781aa2c
+function Penalidad(f,df,g,dg,z0;c0=10.0,c_factor=5.0,tol=1e-12)
+	iter = 0; z1 = copy(z0)
+	Q(x,c) = f(x) + c*P(g,x)
+	dQ(x,c) = df(x) + c*dg(x)*maxz.(g(x))
+	while true
+		z1 = DFP(x->Q(x,c0),x->dQ(x,c0),z0) 
+		if norm(df(z1)) < tol || norm(z0-z1) < tol || c0 > 1e6 || isnan(z1[1]) 
+			break 
+		end 
+		c0   *= c_factor
+		z0    = copy(z1)
+		iter += 1
+
+	end
+	println("#Iter: ",iter)
+	return z0
+end
 
 # ╔═╡ dcb8703a-9847-4766-8326-2b7e13ead843
 md"""Compararemos los resultados arrojados por el método de penalidad con el método del Lagrangiado aumentado que es, en cierto sentido, una sofisticación del enfoque de penalidad.
@@ -135,7 +158,26 @@ md"""Compararemos los resultados arrojados por el método de penalidad con el m�
 	Implementar una función similar a la anterior, que reciba parámetros `f`, `∇f`, `g`, `∇g` y un dato inicial `z` y aplique el método del Lagrangiano aumentado, asumiendo que las restricciones son sólo de desigualdad. """
 
 # ╔═╡ 74975b01-7f46-43e6-8766-53bfa7d958e9
-#completar
+function augmented_lagrangian(f,df,g,dg,z0;tol=1e-12,max_iter=200)
+	c = range(10,stop=10000,length=max_iter)
+	gmas(μ,x,i) = maxz.(μ + c[i]*g(x))
+	L(μ,x,i) = f(x) + sum(gmas(μ,x,i).^2 - μ.^2)/(2*c[i])
+	dxL(μ,x,i) = df(x) + dg(x) * gmas(μ,x,i)
+    iter = 1
+    μ = zeros(length(g(z0)))
+	z1 = zeros(length(z0))
+	while true
+		z1 = DFP(z->L(μ,z,iter),z->dxL(μ,z,iter),z0)
+        if all(g(z1).<=0) || norm(df(z1))<tol || norm(z0-z1)<tol || iter>=max_iter || isnan(z1[1]) 
+            break
+		end
+		μ = maxz.(μ + c[iter]*g(z0))
+		z0 = z1
+		iter += 1 
+    end
+	println("#Iters: ",iter)
+    return z0
+end
 
 # ╔═╡ 862e50cf-51be-4934-bddc-a5f6b97a00af
 md"""
@@ -152,13 +194,10 @@ $z = [x;y;r].$
 """
 
 # ╔═╡ 5ebc67a4-4543-4823-a4f8-bcd75cbdd3e2
-# Pre: z -> x1,y1 x2,y2 ... r
 function desempaquetar(z)
-	n = Int((length(z)-1)/2)
-	r = z[end]
-	x = zeros(n) ; y = zeros(n)
+	n = div((length(z)-1),2); r = z[end];x = zeros(n) ; y = zeros(n)
 	for i in 1:n
-		x[i] = z[2*i-1]; y[i] = z[2*i]
+		x[i] = z[i];y[i]=z[n+i]
 	end
 	return x,y,r
 end
@@ -188,6 +227,7 @@ md"""Otro elemento que puede resultar práctico es construir una solución inici
 
 # ╔═╡ 70f403f0-c3dd-49e2-9268-8754d7aec4c3
 function dato_inicial(n)
+	Random.seed!(1234)
 	x = rand(n)
 	y = rand(n)
 	r = 1
@@ -210,42 +250,19 @@ Necesitaremos implementar el funcional y su gradiente, pero también las restric
 # ╔═╡ 0e443f77-d346-4414-8adf-82a18b90a2cf
 md"""
 !!! note "Ejercicio 6"
-	El funcional a optimizar será el área **no** ocupada por cír culos. Implementar este funcional y gradiente, en términos de la variable $z$."""
+	El funcional a optimizar será el área **no** ocupada por círculos. Implementar este funcional y gradiente, en términos de la variable $z$."""
 
 # ╔═╡ 3171d4dc-edd3-4b26-9adc-49fb896f5c3b
 function f(z)
-	r = z[end]
-	return 1-π*r^2
-end
-
-# ╔═╡ 3225fe20-d414-45b6-b870-84d4d65942ee
-begin 
-	maxz(x) = max(x,0)
-	P(G,x) = sum((maxz.(G(x))).^2) / 2 
-	penalized_function(x,c) = f(x) + c*P(G,x)
-end
-
-# ╔═╡ 4add1b6c-6866-41fd-8c1b-086fc781aa2c
-function Penalidad(f,df,g,dg,z0)
-	c0 = 1.0; c_factor =10.0; tol = 1e-6; kMAX=100
-	iter = 0
-	while norm(x0-x1) < tol && iter < kMAX
-		Q(x,c0) = penalized_function(x,c)
-		dQ(x,c0) = df(x) + c * maxz.(dg(x))
-		z1 = DFP(Q,dQ,z0)
-		if !(false in unique(g(x1).<0)) # ver que esta dentro del conjunto factible 
-			break 
-		else 
-			c0   *= c_factor
-			iter += 1
-		end
-	end
+	x,y,r = desempaquetar(z); n = length(x)
+	return 1-n*π*r^2
 end
 
 # ╔═╡ 068222ed-3c32-44a0-af7a-bc7caae264a9
 function df(z) 
-	r = z[end] 
-	return [0,0,2*π*r]
+	x,y,r = desempaquetar(z); n = length(x)
+	res = zeros(2n+1); res[end] = -2*π*r*n
+	return res
 end
 
 # ╔═╡ cba62975-6abe-4f6a-b153-ec98dcaf3ae5
@@ -287,17 +304,10 @@ function g(z)
 		res[k+1] = y[i]+r-1
 		res[k+2] = r-x[i]
 		res[k+3] = r-y[i]
-		k       +=4
+		k       += 4
 	end
 	res[end] = -r
 	return res
-end
-
-# ╔═╡ 1a2c17b3-2f2b-43fc-859d-945b03a452df
-begin 
-	z = [0.25,0.25,0.25,0.75,0.75,0.25,0.1]
-	#unique(g(z) .< 0)[1] == true
-	!(false in unique([true,false,false]))
 end
 
 # ╔═╡ ae1daad8-5e0d-4784-9e18-5e34ebab5998
@@ -307,55 +317,33 @@ md"""
 
 # ╔═╡ 1ac6a298-963d-41d3-91aa-1c59b0c2f2e0
 function dg(z)
-	x,y,r = desempaquetar(z) ; n = length(x)
-	res = zeros(Int(2*n+1),Int(n*(n-1)/2+4n+1))
-	k = 1
-	res[end,1:n(n-1)/2] .= 8r
+	x, y, r = desempaquetar(z)
+	n = length(x); N = Int(n*(n-1)/2); M = Int(n*(n-1)/2 + 4n + 1)
+	res  = zeros(Int(2*n+1),M)
+	k = 1 
+	
+	res[end,1:N] .= 8r
 	for i in 1:n
-		for j in i+1:n
-			cont = 0
-			for h in 1:2n
-				if h <= n && cont < 4 # -> x
-					if h == i # -> xi
-						res[h,k] = -2(x[i]-x[j]); cont +=1
-					elseif h == j # -> xj
-						res[h,k] = 2(x[i]-x[j]); cont +=1
-					end
-				elseif cont < 4 # -> y
-					if h % n == i # -> yi
-						res[h,k] = -2(y[i]-y[j]); cont +=1
-					elseif h % n == j # -> yj
-						res[h,k] = 2(y[i]-y[j]); cont +=1
-					end
-				else 
-					break				
-				end
-			end
+		for j in (i+1):n
+			res[i,k]   = -2*(x[i] - x[j])
+			res[j,k]   = 2 * (x[i] - x[j])
+			res[n+i,k] = -2 * (y[i] - y[j])
+			res[n+j,k] = 2 * (y[i] - y[j])
 			k += 1
 		end
 	end
+	
+	res[end,(N+1):(end-1)] .= 1 
 	for i in 1:n
-		res[end,k] = 1
-		res[end,k+1] = 1
-		res[end,k+2] = 1
-		res[end,k+3] = 1
-		cont = 0
-		for h in 1:2n
-			if h <= n && cont < 4 && h==i# -> xi
-				res[h,k] = 1; cont +=1
-				res[h,k+2] = -1; cont +=1
-			elseif h % n == i && cont < 4 # -> y
-				res[h,k+1] = 1 ; cont +=1
-				res[h,k+3] = -1 ; cont +=1
-			else 
-				break				
-			end
-		end
-		k += 4
-	end
-	res[end,end] = -1
+        res[i, k] = 1
+        res[n+i, k+1] = 1
+        res[i, k+2] = -1
+        res[n+i, k+3] = -1
+        k += 4
+    end
+	res[end,end] = -1 
 	return res
-end 
+end
 
 # ╔═╡ 2b10fbba-8d1a-46e7-b3d0-e68e48996084
 md"""### Resolución
@@ -368,8 +356,66 @@ Repetir con $n=5$, $n=10$, $n=50$."""
 
 
 
-# ╔═╡ c39bb143-67dd-4e53-ab7d-72aa3548a82a
-#completar
+# ╔═╡ bb78fa96-a7d7-45f6-b6ba-b7488dfbd7eb
+begin 
+ns=[3,5,10,50]
+sol_Penalidad = [] 
+sol_augmentedL = []
+for (i,n) in enumerate(ns)
+	z0 = dato_inicial(n)
+	push!(sol_Penalidad,Penalidad(f,df,g,dg,z0))
+	push!(sol_augmentedL,augmented_lagrangian(f,df,g,dg,z0))
+end
+end 
+
+# ╔═╡ 39b4ed97-fb88-47a3-80d8-0835568b606c
+md""" 
+!!! note "Valor del funcional"
+"""
+
+# ╔═╡ cb70ec90-09cd-4b92-a1ea-524f33dda51b
+begin 
+for (i,n) in enumerate(ns)
+	println("n = $n")
+	println("f(sol de penalidad) = ",f(sol_Penalidad[i]))
+	println("f(sol_augmentedL) = ",f(sol_augmentedL[i]))
+end
+end
+
+# ╔═╡ f106129b-2d21-4891-a134-266b9591d855
+md""" 
+!!! note "Factibilidad de la solucion"
+Los valores de `n` representan la cantidad de círculos y `M` la cantidad de restricciones que fueron satisfechas para cada problema.
+"""
+
+# ╔═╡ 2f6a1b1f-ce39-4d7d-bd87-26cc4f1aa521
+begin 
+for (i,n) in enumerate(ns)
+	M = Int(n*(n-1)/2 + 4n +1)
+	println("n = $n  ||  M = $M")
+	println("Σ g(sol de penalidad).<0 -> ",sum(g(sol_Penalidad[i]).<0))
+	println("Σ g(sol_augmentedL).<0 ---> ",sum(g(sol_augmentedL[i]).<0))
+end 
+end
+
+# ╔═╡ ee7c8f89-4dbb-4593-8786-f17b8fb52bdd
+md""" 
+Para el caso de radios iguales, vemos que, en general, el método del Lagrangiano aumentado obtuvo resultados levemente mejores respecto al de penalidad. En cuanto a las restricciones, ambos métodos se comportan de manera similar. Para este caso, los gⱼ que no caen dentro de las restricciones están muy cerca de 0, pero del lado negativo, lo cual, como veremos, no resulta tan desastroso comparado con lo obtenido en el caso de radios distintos.
+
+Podemos concluir para este caso que el método del Lagrangiano aumentado funciona mejor.
+"""
+
+# ╔═╡ 8046fc89-0118-48fe-b29f-88febecfb96e
+graficar_solucion(sol_augmentedL[1])
+
+# ╔═╡ dc2c62f7-eee2-4426-9651-6fc4ffd24d64
+graficar_solucion(sol_Penalidad[2])
+
+# ╔═╡ 7324f4b7-5097-4323-8e65-719b8ade2033
+graficar_solucion(sol_augmentedL[3])
+
+# ╔═╡ d89b644d-b45e-480a-bdbd-ea5b499271e1
+graficar_solucion(sol_Penalidad[4])
 
 # ╔═╡ 8cbc8634-e2b8-403d-81d6-f9eb0ec4d324
 md"""## Radios distintos
@@ -381,11 +427,9 @@ Para resolver el problema con radios variables es necesario implementar nuevas v
 
 # ╔═╡ 33353538-8bd5-4b34-a89c-96aeac145fff
 function desempaquetar_dist(z)
-	n = Int(length(z)/3)
+	n = div(length(z),3)
 	x = zeros(n); y = zeros(n); r = zeros(n)
-	for i in 1:n
-		x[i] = z[i]; y[i] = z[n+i]; r = z[2n+i]
-	end
+	x = z[1:n]; y = z[n+1:2n]; r = z[2n+1:end]
 	return x,y,r 
 end
 
@@ -399,10 +443,17 @@ md"""
 
 
 # ╔═╡ 548850dd-e261-41da-bff5-b5f532d28333
-#completar
+function f2(z)
+	x,y,r = desempaquetar_dist(z)
+	return 1 - pi*sum(r.^2) 
+end
 
 # ╔═╡ 2f869f4c-79ab-472d-8704-972faf00fa18
-#completar
+function df2(z)
+	x,y,r = desempaquetar_dist(z); n = length(x)
+	res = zeros(3n); res[2n+1:end] .= -2* pi .* r 
+	return res
+end
 
 # ╔═╡ c03d60bc-8db0-4392-8b0e-07f6529b3943
 md"""
@@ -434,7 +485,7 @@ restricciones.
 function g2(z)
 	x,y,r = desempaquetar_dist(z)
 	n     = length(x)
-	res   = zeros(Int(n(n-1)/2+5n))
+	res   = zeros(Int(n*(n-1)/2 + 5n))
 	k     = 1
 	for i in 1:n
 		for j in i+1:n
@@ -456,56 +507,34 @@ end
 # ╔═╡ 381ff285-04c3-41b9-9e4f-cb2f1613d4c7
 function dg2(z)
 	x,y,r = desempaquetar_dist(z) ; n = length(x)
-	res = zeros(Int(3n),Int(n(n-1)/2+5n))
+	res = zeros(Int(3n),Int(n*(n-1)/2+5n))
 	k = 1
 	for i in 1:n
 		for j in i+1:n
-			cont = 0
-			for h in 1:3n
-				if h <= n && cont < 6 # -> x
-					if h == i # -> xi
-						res[h,k] = -2(x[i]-x[j]); cont +=1
-					elseif h == j # -> xj
-						res[h,k] = 2(x[i]-x[j]); cont +=1
-					end
-				elseif n < h <= 2n && cont < 6 # -> y
-					if h % n == i # -> yi
-						res[h,k] = -2(y[i]-y[j]); cont +=1
-					elseif h % n == j # -> yj
-						res[h,k] = 2(y[i]-y[j]); cont +=1
-					end
-				elseif cont < 6
-					if h % n == i # -> ri
-						res[h,k] = 2(r[i]+r[j]); cont +=1
-					elseif h % n == j # -> rj
-						res[h,k] = 2(r[i]+r[j]); cont +=1
-					end
-				else 
-					break 
-				end
-			end
+			res[i,k] = 2*(x[j] - x[i])
+            res[j,k] = 2*(x[i] - x[j])
+            res[n+i,k] = 2*(y[j] - y[i])
+            res[n+j,k] = 2*(y[i] - y[j])
+            res[2n+i,k] = 2*(r[i] + r[j])
+			res[2n+j,k] = 2*(r[i] + r[j])
 			k += 1
 		end
 	end
 	for i in 1:n
-		res[2n + i,k] = 1
-		res[2n + i,k+1] = 1
-		res[2n + i,k+2] = 1
-		res[2n + i,k+3] = 1
-		res[2n + i,k+4] = -1
-		cont = 0
-		for h in 1:2n
-			if h <= n && cont < 4 && h==i # -> xi
-				res[h,k] = 1; cont +=1
-				res[h,k+2] = -1; cont +=1
-			elseif h % n == i && cont < 4 # -> yi
-				res[h,k+1] = 1 ; cont +=1
-				res[h,k+3] = -1 ; cont +=1
-			else
-				break				
-			end
-		end
-		k += 5
+		res[i,k] = 1
+        res[2n+i,k] = 1
+
+		res[n+i,k+1] = 1
+        res[2n+i,k+1] = 1
+
+		res[i,k+2] = -1
+        res[2n+i,k+2] = 1
+
+		res[n+i,k+3] = -1
+        res[2n+i,k+3] = 1
+		
+		res[2n+i,k+4] = -1
+		k +=5
 	end
 	return res
 end
@@ -534,6 +563,7 @@ end
 
 # ╔═╡ 13435de2-f1df-48b4-a8e3-83cb59f7cf64
 function dato_inicial_dist(n)
+	Random.seed!(1234)
 	x = rand(n)
 	y = rand(n)
 	r = 1
@@ -557,13 +587,70 @@ md"""
 	Realizar pruebas resolviendo el problema con distinto número de círculos, usando ambos métodos. Volver a probar con $n=3, 5, 10$ y $50$ (o más). Comparar el valor del funcional y la factibilidad de la solución. """
 
 # ╔═╡ 6fe6e1bc-83df-4c24-a75d-98b1ed250929
-#completar
+begin 
+	sol_Penalidad_dist = [] 
+	sol_augmentedL_dist = []
+	for (i,n) in enumerate(ns)
+		z0 = dato_inicial_dist(n)
+		push!(sol_Penalidad_dist,Penalidad(f2,df2,g2,dg2,z0))
+		push!(sol_augmentedL_dist,augmented_lagrangian(f2,df2,g2,dg2,z0))
+	end
+end 
+
+# ╔═╡ d8517932-1d4f-4172-a3ee-9dc02f53c06c
+md""" 
+!!! note "Valores del Funcional"
+"""
+
+# ╔═╡ 7ad3ef93-230d-456a-b3ca-a6d9f39773dd
+begin 
+for (i,n) in enumerate(ns)
+	println("n = $n")
+	println("f(sol de penalidad) = ",f(sol_Penalidad_dist[i]))
+	println("f(sol de augmentedL) = ",f(sol_augmentedL_dist[i]))
+end
+end
+
+# ╔═╡ 720c3b5b-5b95-47c5-8435-ae50d83b19e4
+md""" 
+!!! note "Valores de las restricciones"
+"""
+
+# ╔═╡ 011eeca8-db23-40bb-920d-1787d326bae9
+begin 
+for (i,n) in enumerate(ns)
+	M = Int(n*(n-1)/2 + 5n)
+	println("n = $n  ||  M = $M")
+	println("Σ g(sol de penalidad).<0 --> ",sum(g2(sol_Penalidad_dist[i]).<0))
+	println("Σ g(sol de augmentedL).<0 -> ",sum(g2(sol_augmentedL_dist[i]).<0))
+end 
+end
+
+# ╔═╡ 3313700d-85a6-4d60-a72b-6d9558f92bbd
+md""" 
+Para el caso de radios distintos, observamos valores de funcionales para `n=5` que no corresponden (área negativa) debido a que las soluciones obtenidas por ambos métodos no cumplen con muchas de las restricciones. Además, de manera notable, mostramos algunos ejemplos visuales de esto.
+
+Concluyo que para este caso ambos métodos funcionan de manera similar.
+"""
+
+# ╔═╡ 45e20078-236f-4869-a9dd-cf59129f556d
+graficar_solucion_dist(sol_augmentedL_dist[1])
+
+# ╔═╡ 2f763f93-2181-48ad-98d9-4a5b353b4809
+graficar_solucion_dist(sol_augmentedL_dist[2])
+
+# ╔═╡ 15dc36d4-5abe-4880-a7c5-d0d1fac21b54
+graficar_solucion_dist(sol_augmentedL_dist[3])
+
+# ╔═╡ d3e3ae78-1905-452b-8ef6-a8bb8301c75b
+graficar_solucion_dist(sol_Penalidad_dist[4])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
 Plots = "~1.40.4"
@@ -575,7 +662,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "196229aacd17a11d961cc140b4e87a3e11a88bed"
+project_hash = "052bf5993f4ae6da84967f052bc464119305b247"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -1639,20 +1726,28 @@ version = "1.4.1+1"
 # ╟─862e50cf-51be-4934-bddc-a5f6b97a00af
 # ╠═5ebc67a4-4543-4823-a4f8-bcd75cbdd3e2
 # ╟─321ea2f9-e4b4-431d-b0e1-3659c83f652c
-# ╠═1e175c6f-cddd-4006-b523-bc42e485686c
+# ╟─1e175c6f-cddd-4006-b523-bc42e485686c
 # ╟─48e42ac2-ee32-454e-b644-1a9af0029d20
-# ╠═70f403f0-c3dd-49e2-9268-8754d7aec4c3
+# ╟─70f403f0-c3dd-49e2-9268-8754d7aec4c3
 # ╟─addb4cc9-e46c-4817-9277-2767e91feb11
 # ╟─0e443f77-d346-4414-8adf-82a18b90a2cf
-# ╠═3171d4dc-edd3-4b26-9adc-49fb896f5c3b
-# ╠═068222ed-3c32-44a0-af7a-bc7caae264a9
+# ╟─3171d4dc-edd3-4b26-9adc-49fb896f5c3b
+# ╟─068222ed-3c32-44a0-af7a-bc7caae264a9
 # ╟─cba62975-6abe-4f6a-b153-ec98dcaf3ae5
-# ╠═241c09ec-8910-4213-aae4-bffe5768de6e
-# ╠═1a2c17b3-2f2b-43fc-859d-945b03a452df
+# ╟─241c09ec-8910-4213-aae4-bffe5768de6e
 # ╟─ae1daad8-5e0d-4784-9e18-5e34ebab5998
-# ╠═1ac6a298-963d-41d3-91aa-1c59b0c2f2e0
+# ╟─1ac6a298-963d-41d3-91aa-1c59b0c2f2e0
 # ╟─2b10fbba-8d1a-46e7-b3d0-e68e48996084
-# ╠═c39bb143-67dd-4e53-ab7d-72aa3548a82a
+# ╠═bb78fa96-a7d7-45f6-b6ba-b7488dfbd7eb
+# ╟─39b4ed97-fb88-47a3-80d8-0835568b606c
+# ╟─cb70ec90-09cd-4b92-a1ea-524f33dda51b
+# ╟─f106129b-2d21-4891-a134-266b9591d855
+# ╟─2f6a1b1f-ce39-4d7d-bd87-26cc4f1aa521
+# ╟─ee7c8f89-4dbb-4593-8786-f17b8fb52bdd
+# ╠═8046fc89-0118-48fe-b29f-88febecfb96e
+# ╠═dc2c62f7-eee2-4426-9651-6fc4ffd24d64
+# ╠═7324f4b7-5097-4323-8e65-719b8ade2033
+# ╠═d89b644d-b45e-480a-bdbd-ea5b499271e1
 # ╟─8cbc8634-e2b8-403d-81d6-f9eb0ec4d324
 # ╠═33353538-8bd5-4b34-a89c-96aeac145fff
 # ╟─abdb4f85-fcb0-4881-97ae-ec024c22e4f9
@@ -1660,12 +1755,21 @@ version = "1.4.1+1"
 # ╠═2f869f4c-79ab-472d-8704-972faf00fa18
 # ╟─c03d60bc-8db0-4392-8b0e-07f6529b3943
 # ╟─46774a64-2066-4b53-bc9b-812764d73476
-# ╠═be7b9372-f007-4035-8ce6-6baed88ee5de
-# ╠═381ff285-04c3-41b9-9e4f-cb2f1613d4c7
+# ╟─be7b9372-f007-4035-8ce6-6baed88ee5de
+# ╟─381ff285-04c3-41b9-9e4f-cb2f1613d4c7
 # ╟─38bf24ea-b276-4725-81e6-77cc2a740847
-# ╠═72351f53-358a-4194-869d-d12bd046f7d7
-# ╠═13435de2-f1df-48b4-a8e3-83cb59f7cf64
+# ╟─72351f53-358a-4194-869d-d12bd046f7d7
+# ╟─13435de2-f1df-48b4-a8e3-83cb59f7cf64
 # ╟─0ace61c4-6bbc-4f5d-a51c-09f91c21affd
 # ╠═6fe6e1bc-83df-4c24-a75d-98b1ed250929
+# ╟─d8517932-1d4f-4172-a3ee-9dc02f53c06c
+# ╟─7ad3ef93-230d-456a-b3ca-a6d9f39773dd
+# ╟─720c3b5b-5b95-47c5-8435-ae50d83b19e4
+# ╟─011eeca8-db23-40bb-920d-1787d326bae9
+# ╟─3313700d-85a6-4d60-a72b-6d9558f92bbd
+# ╠═45e20078-236f-4869-a9dd-cf59129f556d
+# ╠═2f763f93-2181-48ad-98d9-4a5b353b4809
+# ╠═15dc36d4-5abe-4880-a7c5-d0d1fac21b54
+# ╠═d3e3ae78-1905-452b-8ef6-a8bb8301c75b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
